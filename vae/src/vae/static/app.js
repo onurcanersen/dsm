@@ -1294,6 +1294,9 @@
         }
         if (RUN_TERMINAL[payload.state]) {
           closeRunPoll();
+          // A finished run is no longer tracked: the next "Produce data" starts fresh.
+          state.activeTask = null;
+          saveUserState();
           return;
         }
         schedulePoll();

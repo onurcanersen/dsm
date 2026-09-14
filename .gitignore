@@ -218,7 +218,7 @@ __marimo__/
 .streamlit/secrets.toml
 
 # DSM
-# The MSD run workspace: cloned repositories and produced Model Setup Data files.
+# The MDG run workspace: cloned repositories and produced Model Setup Data files.
 workspace/
 
 # macOS

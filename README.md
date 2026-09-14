@@ -1,15 +1,15 @@
 # Digital System Model
 
-- `msd`: DSM-MSD, Model Setup Data Generation. A library producing the Model
+- `mdg`: DSM-MDG, Model Data Generator. A library producing the Model
   Setup Data file of a selected project, platform and system version.
-- `vae`: DSM-VAE, Design Verification, Analysis and Evaluation. A Flask API,
-  a Celery worker and a browser UI over msd.
+- `dve`: DSM-DVE, Design Verification Engine. A Flask API,
+  a Celery worker and a browser UI over mdg.
 
 Requirements: `docs/SRS.md`.
 
 ## Run
 
-Settings: `msd/src/msd/msd.ini`, `vae/src/vae/vae.ini`.
+Settings: `mdg/src/mdg/mdg.ini`, `dve/src/dve/dve.ini`.
 
 **1. Mock data sources** (MySQL and Gitea):
 
@@ -21,7 +21,7 @@ cd dev && docker compose up
 
 ```bash
 python3 -m venv venv && source venv/bin/activate
-pip install -e ./msd -e ./vae
+pip install -e ./mdg -e ./dve
 ```
 
 **3. Redis, worker and API** (one command, Ctrl+C stops all three):
@@ -35,6 +35,6 @@ dsm            # dsm -c 4 sets the worker process count
 ## Test
 
 ```bash
-cd msd && python3 -m pytest
-cd vae && python3 -m pytest
+cd mdg && python3 -m pytest
+cd dve && python3 -m pytest
 ```

@@ -14,11 +14,13 @@ class RelationKind(Enum):
     PUBLISHES = "publishes"
     SUBSCRIBES = "subscribes"
     USES = "uses"
+    SEND = "send"
+    RECEIVE = "receive"
 
 
 @dataclass(frozen=True)
 class UnitRelation:
-    """One relationship from a software unit to a topic or a library."""
+    """One relationship from a software unit to a topic, a library or a message."""
     unit_name: str
     target: str
     kind: RelationKind
@@ -64,3 +66,19 @@ class Topic:
             + 0.30 * self._PRIORITY.get(self.transport_priority or "", 0.0)
         )
         return next(label for threshold, label in self._CRITICALITY if score <= threshold)
+
+
+@dataclass(frozen=True)
+class Message:
+    """A message with its size and frequency; equal to another message of the same name.
+    A message is sent or received by a unit via a UnitRelation of kind SEND/RECEIVE."""
+    id: str
+    name: str
+    size: Optional[int] = None
+    frequency: Optional[float] = None
+
+    def __hash__(self) -> int:
+        return hash(self.name)
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, Message) and self.name == other.name

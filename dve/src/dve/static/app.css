@@ -1748,17 +1748,31 @@ body {
   overflow-y: auto;
 }
 
-/* The four counts the file's metadata carries. */
+/* The counts the file's metadata carries: two rows — Applications and
+   Libraries on top, Nodes, Topics and Messages below. */
 .scale {
   position: relative;
   z-index: 1;
   flex: none;
   border-radius: 0 0 calc(var(--r-card) - 2px) calc(var(--r-card) - 2px);
   overflow: hidden;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 1px;
   background-color: var(--line);
+}
+
+.scale__row {
+  display: grid;
+  gap: 1px;
+}
+
+.scale__row--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.scale__row--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .scale__cell {

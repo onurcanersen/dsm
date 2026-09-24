@@ -9,7 +9,7 @@ import random
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from mdg.domain.inventory import SoftwareUnitVersionInventory
-from mdg.domain.source_data import RelationKind, Topic, UnitRelation
+from mdg.domain.source_data import Message, RelationKind, Topic, UnitRelation
 from mdg.domain.system_hierarchy import SystemHierarchyRecord
 
 NOT_FOUND = "NOT_FOUND"
@@ -29,6 +29,7 @@ class ModelSetupDataGraph:
         app_criticality: Dict[str, bool],
         relations: List[UnitRelation],
         topics: Iterable[Topic],
+        messages: Iterable[Message],
         inventory: SoftwareUnitVersionInventory,
         hierarchy_by_unit: Dict[str, Optional[SystemHierarchyRecord]],
     ) -> Dict[str, Any]:
@@ -42,8 +43,10 @@ class ModelSetupDataGraph:
         ])
         topics_by_name = {t.name: t for t in topics}
         topic_ids = cls._ids("T", list(topics_by_name))
+        messages_by_name = {m.name: m for m in messages}
+        message_ids = cls._ids("M", list(messages_by_name))
 
-        publishes_to, subscribes_to, uses = [], [], []
+        publishes_to, subscribes_to, sends, receives, uses = [], [], [], [], []
         for relation in relations:
             source = app_ids.get(relation.unit_name) or lib_ids.get(relation.unit_name)
             if source is None:
@@ -52,6 +55,9 @@ class ModelSetupDataGraph:
                 target = lib_ids.get(relation.target) or app_ids.get(relation.target)
                 if target is not None:
                     uses.append({"from": source, "to": target})
+            elif relation.target in message_ids:
+                edges = sends if relation.kind is RelationKind.SEND else receives
+                edges.append({"from": source, "to": message_ids[relation.target]})
             elif relation.target in topic_ids:
                 edges = publishes_to if relation.kind is RelationKind.PUBLISHES else subscribes_to
                 edges.append({"from": source, "to": topic_ids[relation.target]})
@@ -62,19 +68,23 @@ class ModelSetupDataGraph:
                       "system_hierarchy": cls._hierarchy(hierarchy_by_unit.get(name))} for name in lib_ids]
         nodes = [{"id": node_ids[name], "name": name} for name in node_ids]
         topic_payload = [cls._topic(topics_by_name[name], topic_ids[name]) for name in topic_ids]
+        message_payload = [cls._message(messages_by_name[name], message_ids[name]) for name in message_ids]
 
         return {
-            "metadata": {"scale": {"apps": len(applications), "topics": len(topic_payload),
-                                   "nodes": len(nodes), "libraries": len(libraries)}},
+            "metadata": {"scale": {"apps": len(applications), "topics": len(topic_payload), "messages": len(message_payload),
+                                    "nodes": len(nodes), "libraries": len(libraries)}},
             "nodes": nodes,
             "topics": topic_payload,
+            "messages": message_payload,
             "applications": applications,
             "libraries": libraries,
             "relationships": {
                 "runs_on": [{"from": app_ids[app], "to": node_ids[node]}
-                            for app, node in app_node_relations if node in node_ids],
+                             for app, node in app_node_relations if node in node_ids],
                 "publishes_to": publishes_to,
                 "subscribes_to": subscribes_to,
+                "sends": sends,
+                "receives": receives,
                 "uses": uses,
             },
         }
@@ -110,6 +120,16 @@ class ModelSetupDataGraph:
             },
             "frequency": topic.frequency(),
             "criticality": topic.criticality(),
+        }
+
+    @staticmethod
+    def _message(message: Message, message_id: str) -> Dict[str, Any]:
+        return {
+            "id": message_id,
+            "message_id": message.id,
+            "name": message.name,
+            "size": message.size if message.size is not None else -1,
+            "frequency": message.frequency,
         }
 
     @staticmethod

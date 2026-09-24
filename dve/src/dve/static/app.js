@@ -1566,24 +1566,41 @@
     el.modelContext.hidden = false;
   }
 
-  // The counts the file's own metadata carries.
+  // The counts the file's metadata carries. The model card lays them out
+  // in two rows: Applications and Libraries on top, Nodes, Topics and
+  // Messages below.
   var SCALE_CELLS = [
     { key: "apps", label: "Applications" },
     { key: "topics", label: "Topics" },
     { key: "nodes", label: "Nodes" },
-    { key: "libraries", label: "Libraries" }
+    { key: "libraries", label: "Libraries" },
+    { key: "messages", label: "Messages" }
   ];
+  var SCALE_ROWS = [
+    { cls: "scale__row--two", keys: ["apps", "libraries"] },
+    { cls: "scale__row--three", keys: ["nodes", "topics", "messages"] }
+  ];
+  var cellByKey = {};
+  SCALE_CELLS.forEach(function (cell) {
+    cellByKey[cell.key] = cell;
+  });
 
   function renderModelScale(model) {
     var scale = ((model.graph || {}).metadata || {}).scale || {};
     el.modelScale.textContent = "";
-    SCALE_CELLS.forEach(function (cell) {
-      var box = document.createElement("div");
-      box.className = "scale__cell";
-      var count = scale[cell.key];
-      box.appendChild(span("scale__value", count === undefined ? "—" : String(count)));
-      box.appendChild(span("scale__label", cell.label));
-      el.modelScale.appendChild(box);
+    SCALE_ROWS.forEach(function (row) {
+      var wrap = document.createElement("div");
+      wrap.className = "scale__row " + row.cls;
+      row.keys.forEach(function (key) {
+        var cell = cellByKey[key];
+        var box = document.createElement("div");
+        box.className = "scale__cell";
+        var count = scale[key];
+        box.appendChild(span("scale__value", count === undefined ? "—" : String(count)));
+        box.appendChild(span("scale__label", cell.label));
+        wrap.appendChild(box);
+      });
+      el.modelScale.appendChild(wrap);
     });
   }
 

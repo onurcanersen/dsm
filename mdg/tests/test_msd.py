@@ -39,7 +39,7 @@ def test_result_names_the_file_the_units_the_scale_and_no_errors(tmp_path: Path)
         {"unit_name": seed.NAV_APP, "version": seed.VERSION, "is_candidate": False, "status": "ok"},
         {"unit_name": seed.SENSOR_APP, "version": seed.VERSION, "is_candidate": False, "status": "ok"},
     ]
-    assert result["scale"] == {"apps": 2, "topics": 2, "nodes": 2, "libraries": 1}
+    assert result["scale"] == {"apps": 2, "topics": 2, "messages": 2, "nodes": 2, "libraries": 1}
     assert result["candidate"] is None
     assert result["errors"] == []
 
@@ -63,6 +63,11 @@ def test_saved_file_holds_the_whole_model_setup_data(tmp_path: Path):
     assert graph["relationships"]["runs_on"] == [{"from": "A0", "to": "N0"}, {"from": "A1", "to": "N1"}]
     assert graph["relationships"]["publishes_to"] == [{"from": "A0", "to": "T0"}, {"from": "A1", "to": "T1"}]
     assert graph["relationships"]["subscribes_to"] == [{"from": "A0", "to": "T1"}]
+    assert [(m["id"], m["message_id"], m["name"]) for m in graph["messages"]] == [
+        ("M0", "MSG-001", seed.MSG_NAV_POSITION), ("M1", "MSG-002", seed.MSG_SENSOR_DATA),
+    ]
+    assert graph["relationships"]["sends"] == [{"from": "A0", "to": "M0"}, {"from": "A1", "to": "M1"}]
+    assert graph["relationships"]["receives"] == [{"from": "A1", "to": "M0"}, {"from": "A0", "to": "M1"}]
 
 
 def test_no_producer_is_recorded_when_none_is_named(tmp_path: Path):

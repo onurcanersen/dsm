@@ -7,8 +7,9 @@ from pathlib import Path
 from typing import Dict, List, Set, Tuple
 
 from fakes import seed
-from mdg.domain.source_data import RelationKind, Topic, UnitRelation
+from mdg.domain.source_data import Message, RelationKind, Topic, UnitRelation
 from mdg.ports.build_runner import IBuildRunner
+from mdg.ports.message_file_parser import IMessageFileParser
 from mdg.ports.source_code_parser import ISourceCodeParser
 from mdg.ports.system_repo_parser import ISystemRepoParser
 from mdg.ports.type_support_parser import ITypeSupportParser
@@ -69,6 +70,23 @@ def type_support_parser_class(calls: Calls):
             return {Topic(seed.NAV_POSITION, size=1, durability="VOLATILE", reliability="RELIABLE", transport_priority="LOW")}
 
     return FakeTypeSupportParser
+
+
+def message_file_parser_class(calls: Calls):
+    """A fake IMessageFileParser class the run constructs on the run dir."""
+
+    class FakeMessageFileParser(IMessageFileParser):
+        def __init__(self, run_dir: Path):
+            self.run_dir = run_dir
+            calls.log.append(("messages", str(run_dir)))
+
+        def get_message_list(self) -> Set[Message]:
+            return {Message("MSG-001", seed.MSG_NAV_POSITION, size=6138, frequency=20.0)}
+
+        def get_message_relations(self) -> List[UnitRelation]:
+            return [UnitRelation(seed.NAV_APP, seed.MSG_NAV_POSITION, RelationKind.SEND)]
+
+    return FakeMessageFileParser
 
 
 class FakeBuildRunner(IBuildRunner):

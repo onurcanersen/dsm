@@ -17,6 +17,7 @@ from mdg.domain.model_setup_data_graph import ModelSetupDataGraph
 from mdg.domain.workspace import Workspace
 from mdg.ports.build_runner import IBuildRunner
 from mdg.ports.config_management_repository import IConfigManagementRepository
+from mdg.ports.message_file_parser import MessageFileParserFactory
 from mdg.ports.model_setup_data_store import IModelSetupDataStore
 from mdg.ports.source_code_parser import ISourceCodeParser
 from mdg.ports.system_repo_parser import SystemRepoParserFactory
@@ -81,6 +82,7 @@ class ProduceModelSetupData:
         system_repo_parser: SystemRepoParserFactory,
         source_code_parser: ISourceCodeParser,
         type_support_parser: TypeSupportParserFactory,
+        message_file_parser: MessageFileParserFactory,
         build_runner: IBuildRunner,
         check_mandatory_fields: CheckMandatoryFields,
         store: IModelSetupDataStore,
@@ -95,6 +97,7 @@ class ProduceModelSetupData:
         self._system_repo_parser = system_repo_parser
         self._source_code_parser = source_code_parser
         self._type_support_parser = type_support_parser
+        self._message_file_parser = message_file_parser
         self._build_runner = build_runner
         self._check = check_mandatory_fields
         self._store = store
@@ -158,11 +161,14 @@ class ProduceModelSetupData:
             steps.advance("parse")
 
         topics = self._type_support_parser(run_dir).get_topic_list()
-        errors.extend(self._check.execute([*files, *relations, *topics], context))
+        message_parser = self._message_file_parser(run_dir)
+        messages = message_parser.get_message_list()
+        all_relations = [*relations, *message_parser.get_message_relations()]
+        errors.extend(self._check.execute([*files, *all_relations, *topics, *messages], context))
         hierarchy = {u.unit_name: self._config_repo.get_system_hierarchy(u.unit_name) for u in inventory.units}
         graph = ModelSetupDataGraph.build(
             app_node_relations, parser.get_app_role_relation(), parser.get_app_criticality_relation(),
-            relations, topics, inventory, hierarchy,
+            all_relations, topics, messages, inventory, hierarchy,
         )
         data = ModelSetupData(context, inventory, files, errors, graph, produced_by=produced_by)
         path = self._store.save(data, run_id)

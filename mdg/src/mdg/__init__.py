@@ -20,6 +20,7 @@ from mdg.adapters.model_setup_data.filesystem_model_setup_data_store import File
 from mdg.adapters.source_code.git_source_code_repository import GitSourceCodeRepository
 from mdg.adapters.source_code.gmake_build_runner import GmakeBuildRunner
 from mdg.adapters.source_code.mandatory_files import MandatoryFiles
+from mdg.adapters.source_data.message_file_parser import MessageFileParser
 from mdg.adapters.source_data.source_code_parser import SourceCodeParser
 from mdg.adapters.source_data.system_repo_parser import SystemRepoParser
 from mdg.adapters.source_data.type_support_parser import TypeSupportParser
@@ -29,7 +30,7 @@ from mdg.domain.data_source import DataSourceConfig, SourceType
 from mdg.domain.error_record import DataAcquisitionError, ErrorRecord, ErrorStatus
 from mdg.domain.inventory import CandidateUnitVersion
 from mdg.domain.model_setup_data import ModelSetupDataRecord
-from mdg.domain.source_data import Topic, UnitRelation
+from mdg.domain.source_data import Message, Topic, UnitRelation
 from mdg.domain.workspace import Workspace
 from mdg.ports.config_management_repository import ConfigManagementAccessError, IConfigManagementRepository
 from mdg.ports.model_setup_data_store import IModelSetupDataStore
@@ -55,6 +56,7 @@ __all__ = [
     "IConfigManagementRepository",
     "IModelSetupDataStore",
     "ISourceCodeRepository",
+    "Message",
     "ModelSetupDataRecord",
     "ProductionResult",
     "SourceRepoAccessError",
@@ -71,6 +73,10 @@ MANDATORY_FIELD_RULES = [
     MandatoryFieldRule("file_name", AcquiredFile),
     MandatoryFieldRule("target", UnitRelation),
     MandatoryFieldRule("name", Topic),
+    MandatoryFieldRule("id", Message),
+    MandatoryFieldRule("name", Message),
+    MandatoryFieldRule("size", Message),
+    MandatoryFieldRule("frequency", Message),
 ]
 
 
@@ -120,6 +126,7 @@ def produce_model_setup_data(
         system_repo_parser=SystemRepoParser,
         source_code_parser=SourceCodeParser(settings.source_parser, files),
         type_support_parser=TypeSupportParser,
+        message_file_parser=MessageFileParser,
         build_runner=GmakeBuildRunner(files),
         check_mandatory_fields=CheckMandatoryFields(MANDATORY_FIELD_RULES),
         store=model_setup_data_store(workspace),

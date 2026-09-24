@@ -8,7 +8,7 @@ import pytest
 
 from fakes import seed
 from fakes.fake_config_management_repository import FakeConfigManagementRepository
-from fakes.fake_parsers import Calls, FakeBuildRunner, FakeSourceCodeParser, system_repo_parser_class, type_support_parser_class
+from fakes.fake_parsers import Calls, FakeBuildRunner, FakeSourceCodeParser, message_file_parser_class, system_repo_parser_class, type_support_parser_class
 from fakes.fake_source_code_repository import FakeSourceCodeRepository
 from mdg import MANDATORY_FIELD_RULES
 from mdg.adapters.model_setup_data.filesystem_model_setup_data_store import FilesystemModelSetupDataStore
@@ -39,6 +39,7 @@ class Run:
             system_repo_parser=self.parser_class,
             source_code_parser=FakeSourceCodeParser(self.calls),
             type_support_parser=type_support_parser_class(self.calls),
+            message_file_parser=message_file_parser_class(self.calls),
             build_runner=FakeBuildRunner(self.calls),
             check_mandatory_fields=CheckMandatoryFields(MANDATORY_FIELD_RULES),
             store=FilesystemModelSetupDataStore(workspace),
@@ -75,7 +76,7 @@ def test_only_the_applications_the_system_repo_places_are_cloned(tmp_path: Path)
     assert result.errors == []
 
 
-def test_build_runs_before_each_parse_and_type_support_runs_last_over_the_run_dir(tmp_path: Path):
+def test_build_runs_before_each_parse_and_run_level_parsers_run_last_over_the_run_dir(tmp_path: Path):
     run = Run(tmp_path, run_regenerate_code=True)
 
     run.execute()
@@ -86,6 +87,7 @@ def test_build_runs_before_each_parse_and_type_support_runs_last_over_the_run_di
         ("regenerate_code", seed.NAV_APP), ("parse", seed.NAV_APP),
         ("regenerate_code", seed.SENSOR_APP), ("parse", seed.SENSOR_APP),
         ("type_support", str(run.run_dir)),
+        ("messages", str(run.run_dir)),
     ]
 
 

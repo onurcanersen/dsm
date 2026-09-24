@@ -4,7 +4,7 @@
 from fakes import seed
 from mdg.domain.inventory import SoftwareUnitVersionInventory
 from mdg.domain.model_setup_data_graph import ModelSetupDataGraph
-from mdg.domain.source_data import RelationKind, Topic, UnitRelation
+from mdg.domain.source_data import Message, RelationKind, Topic, UnitRelation
 
 APP_NODES = [(seed.NAV_APP, seed.NODE_0), (seed.SENSOR_APP, seed.NODE_1)]
 RELATIONS = [
@@ -12,16 +12,22 @@ RELATIONS = [
     UnitRelation(seed.NAV_APP, seed.SENSOR_DATA, RelationKind.SUBSCRIBES),
     UnitRelation(seed.NAV_APP, seed.COMMON_LIB, RelationKind.USES),
     UnitRelation(seed.SENSOR_APP, seed.SENSOR_DATA, RelationKind.PUBLISHES),
+    UnitRelation(seed.NAV_APP, seed.MSG_NAV_POSITION, RelationKind.SEND),
+    UnitRelation(seed.SENSOR_APP, seed.MSG_NAV_POSITION, RelationKind.RECEIVE),
 ]
 TOPICS = [
     Topic(seed.NAV_POSITION, 6138, "PERSISTENT", "BEST_EFFORT", "LOW"),
     Topic(seed.SENSOR_DATA, 1207, "TRANSIENT", "BEST_EFFORT", "MEDIUM"),
 ]
+MESSAGES = [
+    Message("MSG-001", seed.MSG_NAV_POSITION, 6138, 20.0),
+    Message("MSG-002", seed.MSG_SENSOR_DATA, 1207, 100.0),
+]
 
 
 def _graph(app_roles=None, app_criticality=None):
     inventory = SoftwareUnitVersionInventory(seed.CONTEXT, seed.inventory_rows()).without(seed.SYSTEM_REPO)
-    return ModelSetupDataGraph.build(APP_NODES, app_roles or {}, app_criticality or {}, RELATIONS, TOPICS, inventory, {})
+    return ModelSetupDataGraph.build(APP_NODES, app_roles or {}, app_criticality or {}, RELATIONS, TOPICS, MESSAGES, inventory, {})
 
 
 def test_entities_get_sorted_ids_and_inventory_versions():
@@ -33,7 +39,11 @@ def test_entities_get_sorted_ids_and_inventory_versions():
     ]
     assert [(l["id"], l["name"], l["version"]) for l in graph["libraries"]] == [("L0", seed.COMMON_LIB, seed.VERSION)]
     assert [(t["id"], t["name"], t["size"]) for t in graph["topics"]] == [("T0", seed.NAV_POSITION, 6138), ("T1", seed.SENSOR_DATA, 1207)]
-    assert graph["metadata"]["scale"] == {"apps": 2, "topics": 2, "nodes": 2, "libraries": 1}
+    assert [(m["id"], m["message_id"], m["name"], m["size"], m["frequency"]) for m in graph["messages"]] == [
+        ("M0", "MSG-001", seed.MSG_NAV_POSITION, 6138, 20.0),
+        ("M1", "MSG-002", seed.MSG_SENSOR_DATA, 1207, 100.0),
+    ]
+    assert graph["metadata"]["scale"] == {"apps": 2, "topics": 2, "messages": 2, "nodes": 2, "libraries": 1}
 
 
 def test_relationships_join_by_entity_id():
@@ -42,6 +52,8 @@ def test_relationships_join_by_entity_id():
     assert relationships["runs_on"] == [{"from": "A0", "to": "N0"}, {"from": "A1", "to": "N1"}]
     assert relationships["publishes_to"] == [{"from": "A0", "to": "T0"}, {"from": "A1", "to": "T1"}]
     assert relationships["subscribes_to"] == [{"from": "A0", "to": "T1"}]
+    assert relationships["sends"] == [{"from": "A0", "to": "M0"}]
+    assert relationships["receives"] == [{"from": "A1", "to": "M0"}]
     assert relationships["uses"] == [{"from": "A0", "to": "L0"}]
 
 

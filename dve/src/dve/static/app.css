@@ -141,6 +141,30 @@ body {
   background-color: var(--line);
 }
 
+/* The product lockup, pinned to the top-left corner while signed in. */
+.brandbar {
+  position: fixed;
+  top: 18px;
+  left: 22px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brandbar__img {
+  display: block;
+  width: auto;
+}
+
+.brandbar__img--left {
+  height: 38px;
+}
+
+.brandbar__img--right {
+  height: 30px;
+}
+
 .linkbtn {
   flex: none;
   display: flex;
@@ -436,12 +460,27 @@ body {
   text-shadow: 0 0 18px rgba(34, 230, 245, 0.35);
 }
 
-/* The product mark on the sign-in card; logo.png carries its glow in a 28px padding, taken back out by the margins. */
+/* The product lockup on the sign-in card: emblem left, wordmark right. */
 .logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: var(--gap-mark) auto 0;
+}
+
+.logo__img {
   display: block;
   width: auto;
-  height: 119px;
-  margin: calc(var(--gap-mark) - 14px) auto -14px;
+}
+
+.logo__img--left {
+  height: 104px;
+}
+
+.logo__img--right {
+  width: 118px;
+  height: auto;
 }
 
 /* Glyph for a card about one thing rather than the product. */

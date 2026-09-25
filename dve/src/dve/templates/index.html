@@ -19,6 +19,23 @@
     />
   </head>
   <body>
+    <div class="brandbar" id="brandbar" hidden>
+      <img
+        class="brandbar__img brandbar__img--left"
+        src="{{ url_for('static', filename='img/logo-left.png') }}"
+        alt=""
+        width="204"
+        height="228"
+      />
+      <img
+        class="brandbar__img brandbar__img--right"
+        src="{{ url_for('static', filename='img/logo-right.png') }}"
+        alt=""
+        width="350"
+        height="135"
+      />
+    </div>
+
     <div class="sessionbar" id="sessionbar" hidden>
       <i class="lucide lucide-circle-user"></i>
       <span class="sessionbar__user" id="sessionbar-user"></span>
@@ -98,15 +115,22 @@
 
         <div class="card__body">
           <h1 class="title" id="title">Digital System Model</h1>
-          <img
-            class="logo"
-            id="logo"
-            src="{{ url_for('static', filename='img/logo.png') }}"
-            alt=""
-            width="227"
-            height="248"
-            hidden
-          />
+          <div class="logo" id="logo" hidden>
+            <img
+              class="logo__img logo__img--left"
+              src="{{ url_for('static', filename='img/logo-left.png') }}"
+              alt=""
+              width="204"
+              height="228"
+            />
+            <img
+              class="logo__img logo__img--right"
+              src="{{ url_for('static', filename='img/logo-right.png') }}"
+              alt=""
+              width="350"
+              height="135"
+            />
+          </div>
           <i class="lucide lucide-database brand-icon" id="brand-icon" hidden></i>
           <p class="subtitle" id="subtitle">Secure Access</p>
 

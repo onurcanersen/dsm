@@ -221,6 +221,7 @@
 
   function renderSessionbar(visible) {
     el.sessionbar.hidden = !visible;
+    el.brandbar.hidden = !visible;
     if (visible) {
       el.sessionbarUser.textContent = state.username || "";
     }

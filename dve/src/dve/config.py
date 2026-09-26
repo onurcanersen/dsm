@@ -1,5 +1,5 @@
-"""Loads dve.ini: the data source addresses, the API, the worker and the Redis
-container settings (SRS DSM-DVE req 4, 7)."""
+"""Loads dve.ini: the data source addresses, the API and the background task
+settings (SRS DSM-DVE req 4, 7)."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import configparser
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from mdg import DataSourceConfig, SourceType
 
@@ -25,17 +25,8 @@ class ApiConfig:
 
 @dataclass(frozen=True)
 class WorkerConfig:
-    """The Celery broker and result backend."""
-    broker_url: str = "redis://localhost:6379/0"
-    result_backend: str = "redis://localhost:6379/1"
-
-
-@dataclass(frozen=True)
-class RedisConfig:
-    """The Redis container the dsm command starts, with its port mapped to the host."""
-    container: str = "dsm-redis"
-    image: str = "redis:8.4"
-    port: int = 6379
+    """How many background tasks (productions) run at once; None means the CPU count."""
+    concurrency: Optional[int] = None
 
 
 @dataclass(frozen=True)
@@ -43,7 +34,6 @@ class Config:
     data_sources: List[DataSourceConfig] = field(default_factory=list)
     api: ApiConfig = field(default_factory=ApiConfig)
     worker: WorkerConfig = field(default_factory=WorkerConfig)
-    redis: RedisConfig = field(default_factory=RedisConfig)
 
 
 def load(path: Path = DVE_INI) -> Config:
@@ -64,6 +54,7 @@ def load(path: Path = DVE_INI) -> Config:
         )
         for source_type in SourceType if ini.has_section(source_type.value)
     ]
+    concurrency = text("worker", "concurrency", "")
     return Config(
         data_sources=data_sources,
         api=ApiConfig(
@@ -72,15 +63,7 @@ def load(path: Path = DVE_INI) -> Config:
             secret_key=text("api", "secret_key", ApiConfig.secret_key),
             session_lifetime=ini.getint("api", "session_lifetime", fallback=ApiConfig.session_lifetime),
         ),
-        worker=WorkerConfig(
-            broker_url=text("worker", "broker_url", WorkerConfig.broker_url),
-            result_backend=text("worker", "result_backend", WorkerConfig.result_backend),
-        ),
-        redis=RedisConfig(
-            container=text("redis", "container", RedisConfig.container),
-            image=text("redis", "image", RedisConfig.image),
-            port=ini.getint("redis", "port", fallback=RedisConfig.port),
-        ),
+        worker=WorkerConfig(concurrency=int(concurrency) if concurrency else None),
     )
 
 

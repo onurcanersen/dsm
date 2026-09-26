@@ -79,10 +79,9 @@
 
   var VIEWS = ["boot", "login"].concat(STAGES);
 
-  // Celery states and how each reads on the run card.
+  // Run states and how each reads on the run card.
   var RUN_STATES = {
     PENDING: { label: "Queued", tone: "busy" },
-    RETRY: { label: "Retrying", tone: "busy" },
     STARTED: { label: "Running", tone: "busy" },
     SUCCESS: { label: "Successful", tone: "ok" },
     FAILURE: { label: "Failed", tone: "bad" },

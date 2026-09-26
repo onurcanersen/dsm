@@ -21,7 +21,7 @@ Endpoints:
   GET    /api/mdg/tasks/<task_id>?after=<line>                                                           [login]
   POST   /api/mdg/tasks/<task_id>/cancel                                                                 [login]
 
-Run with: python -m dve.api (the dsm command starts it together with the worker).
+Run with: python -m dve.api, or dsm [-c N].
 """
 
 from __future__ import annotations
@@ -307,11 +307,17 @@ def create_app(runtime: Runtime | None = None) -> Flask:
     return app
 
 
-def main() -> None:
+def serve(runtime: Runtime) -> None:
+    """Serves the runtime on the [api] address until interrupted; the runs in
+    flight end with the process, since they are its daemon children."""
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     api = config().api
     print(f"DVE API on http://{api.host}:{api.port}", flush=True)
-    create_app().run(host=api.host, port=api.port)
+    create_app(runtime).run(host=api.host, port=api.port)
+
+
+def main() -> None:
+    serve(load_runtime())
 
 
 if __name__ == "__main__":

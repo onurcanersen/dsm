@@ -9,9 +9,6 @@ setup(
     packages=find_packages(where="src"),
     install_requires=[
         "Flask==2.3.2",
-        "celery==5.2.3",
-        "redis==4.1.1",
-        "docker==7.1.0",
         "mdg",
     ],
     entry_points={"console_scripts": ["dsm=dve.__main__:main"]},

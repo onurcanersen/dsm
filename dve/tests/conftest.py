@@ -11,7 +11,7 @@ import pytest
 
 from fakes import seed
 from fakes.fake_config_management_repository import FakeConfigManagementRepository
-from fakes.fake_production_log import FakeProductionLog
+from dve.adapters.in_memory_task_log import InMemoryTaskLog
 from fakes.fake_production_runner import FakeProductionRunner
 from fakes.fake_source_code_repository import FakeSourceCodeRepository
 from dve import Runtime
@@ -33,7 +33,7 @@ def make_runtime():
             source_repo_factory=source_repo_factory,
             directory_service=LdapDirectoryService(),
             production_runner=production_runner or FakeProductionRunner(),
-            production_log=FakeProductionLog(),
+            production_log=InMemoryTaskLog(),
             model_setup_data_store=mdg.model_setup_data_store(workspace or Path("/nonexistent-workspace")),
         )
     return factory

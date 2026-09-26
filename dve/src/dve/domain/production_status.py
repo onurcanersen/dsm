@@ -9,7 +9,7 @@ from typing import Any, Dict, Optional
 
 @dataclass(frozen=True)
 class ProductionStatus:
-    """State (Celery's PENDING, STARTED, SUCCESS, FAILURE, REVOKED), the result
+    """State (PENDING, STARTED, SUCCESS, FAILURE, REVOKED), the result
     or error of a finished run, and the progress a running one published (req 6)."""
     run_id: str
     state: str

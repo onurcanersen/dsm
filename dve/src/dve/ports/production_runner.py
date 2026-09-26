@@ -4,7 +4,7 @@ background (SRS DSM-DVE req 6, 50)."""
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from mdg import DataSourceConfig, SourceType
 
@@ -21,11 +21,11 @@ class IProductionRunner(ABC):
         selection: Selection,
         sources: Dict[SourceType, DataSourceConfig],
         produced_by: Optional[str] = None,
-        candidate: Optional[dict] = None,
+        candidates: Optional[List[dict]] = None,
     ) -> str:
         """Starts one production for the selection with the session's data sources
-        and returns its run id (req 6); `candidate` is the optional
-        {"unit_name", "version"} under evaluation (SRS DSM-MDG req 11)."""
+        and returns its run id (req 6); `candidates` are the optional
+        {"unit_name", "version"} entries under evaluation (SRS DSM-MDG req 11)."""
 
     @abstractmethod
     def status(self, run_id: str) -> ProductionStatus:

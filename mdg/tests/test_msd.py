@@ -31,7 +31,8 @@ def _file(result: dict) -> dict:
 def test_result_names_the_file_the_units_the_scale_and_no_errors(tmp_path: Path):
     result = _produce(tmp_path, produced_by=seed.PRODUCER)
 
-    assert set(result) == {"run_id", "file", "units", "scale", "candidate", "errors"}
+    assert set(result) == {"run_id", "file", "units", "scale", "acquired_files", "candidates", "errors"}
+    assert result["acquired_files"] == 4
     assert result["run_id"] == seed.RUN_1
     assert Path(result["file"]) == tmp_path / "ws" / seed.PROJECT / seed.PLATFORM / seed.VERSION / seed.RUN_1 / FILE_NAME
     assert result["units"] == [
@@ -40,7 +41,7 @@ def test_result_names_the_file_the_units_the_scale_and_no_errors(tmp_path: Path)
         {"unit_name": seed.SENSOR_APP, "version": seed.VERSION, "is_candidate": False, "status": "ok"},
     ]
     assert result["scale"] == {"apps": 2, "topics": 2, "messages": 2, "nodes": 2, "libraries": 1}
-    assert result["candidate"] is None
+    assert result["candidates"] == []
     assert result["errors"] == []
 
 
@@ -74,17 +75,24 @@ def test_no_producer_is_recorded_when_none_is_named(tmp_path: Path):
     assert _file(_produce(tmp_path))["produced_by"] is None
 
 
-def test_candidate_version_is_cloned_and_flagged_in_the_inventory(tmp_path: Path):
+def test_candidate_versions_are_cloned_and_flagged_in_the_inventory(tmp_path: Path):
     source_repo = FakeSourceCodeRepository()
-    candidate = mdg.CandidateUnitVersion(seed.SENSOR_APP, seed.CANDIDATE_VERSION)
+    candidates = [
+        mdg.CandidateUnitVersion(seed.SENSOR_APP, seed.CANDIDATE_VERSION),
+        mdg.CandidateUnitVersion(seed.NAV_APP, "2.0.0"),
+    ]
 
-    result = _produce(tmp_path, source_repo=source_repo, candidate=candidate)
+    result = _produce(tmp_path, source_repo=source_repo, candidates=candidates)
 
     assert (seed.SENSOR_APP, seed.CANDIDATE_VERSION) in source_repo.cloned
-    assert result["candidate"] == candidate.to_dict()
+    assert (seed.NAV_APP, "2.0.0") in source_repo.cloned
+    assert result["candidates"] == [c.to_dict() for c in candidates]
     payload = _file(result)
+    assert payload["inventory"]["units"][1] == {"unit_name": seed.NAV_APP, "version": "2.0.0", "is_candidate": True}
     assert payload["inventory"]["units"][2] == {"unit_name": seed.SENSOR_APP, "version": seed.CANDIDATE_VERSION, "is_candidate": True}
-    assert {a["name"]: a["version"] for a in payload["graph"]["applications"]}[seed.SENSOR_APP] == seed.CANDIDATE_VERSION
+    versions = {a["name"]: a["version"] for a in payload["graph"]["applications"]}
+    assert versions[seed.SENSOR_APP] == seed.CANDIDATE_VERSION
+    assert versions[seed.NAV_APP] == "2.0.0"
 
 
 def test_clone_failure_and_missing_file_land_in_errors_and_unit_status(tmp_path: Path):
@@ -129,4 +137,20 @@ def test_progress_reports_the_percent_and_phase_after_each_work_unit(tmp_path: P
 
     _produce(tmp_path, progress=lambda percent, phase: reports.append((percent, phase)))
 
-    assert reports == [(16, "system"), (33, "clone"), (50, "clone"), (66, "parse"), (83, "parse"), (100, "finalize")]
+    assert reports == [
+        (10, "context"), (20, "system"), (30, "system"),
+        (50, "clone"), (62, "clone"), (75, "parse"), (87, "parse"), (100, "finalize"),
+    ]
+
+
+def test_progress_never_falls_back_when_the_total_is_corrected():
+    from mdg.services.produce_model_setup_data import _Progress
+    reports = []
+    steps = _Progress(lambda percent, phase: reports.append(percent), total=10)
+    for _ in range(3):
+        steps.advance("x")
+
+    steps.retotal(2)
+    steps.advance("x")
+
+    assert reports == [10, 20, 30, 100]

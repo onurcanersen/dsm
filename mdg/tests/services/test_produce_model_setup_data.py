@@ -122,12 +122,16 @@ def test_system_repo_clone_failure_fails_the_run(tmp_path: Path):
     assert run.parser_class.instances == []
 
 
-def test_progress_counts_system_clone_parse_and_finalize(tmp_path: Path):
+def test_progress_counts_context_system_clone_parse_and_finalize(tmp_path: Path):
     reports = []
 
     Run(tmp_path).execute(progress=lambda percent, phase: reports.append((percent, phase)))
 
-    assert reports == [(16, "system"), (33, "clone"), (50, "clone"), (66, "parse"), (83, "parse"), (100, "finalize")]
+    # The total is bounded by the inventory's three units until the system repo names two.
+    assert reports == [
+        (10, "context"), (20, "system"), (30, "system"),
+        (50, "clone"), (62, "clone"), (75, "parse"), (87, "parse"), (100, "finalize"),
+    ]
 
 
 def test_progress_of_a_single_unit_moves_in_quarters(tmp_path: Path):
@@ -135,4 +139,4 @@ def test_progress_of_a_single_unit_moves_in_quarters(tmp_path: Path):
 
     Run(tmp_path, app_nodes=[(seed.NAV_APP, seed.NODE_0)]).execute(progress=lambda p, phase: reports.append((p, phase)))
 
-    assert reports == [(25, "system"), (50, "clone"), (75, "parse"), (100, "finalize")]
+    assert reports == [(10, "context"), (20, "system"), (30, "system"), (66, "clone"), (83, "parse"), (100, "finalize")]

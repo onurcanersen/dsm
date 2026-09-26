@@ -14,9 +14,10 @@ import multiprocessing
 import os
 import signal
 import threading
+import time
 import uuid
 from collections import deque
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Deque, Dict, Optional, Protocol, Tuple
 
 from dve.ports.production_log import IProductionLog
@@ -125,12 +126,19 @@ def run_task(target: Callable[..., Any], task_id: str, args: tuple, events: Task
 @dataclass(frozen=True)
 class TaskStatus:
     """State (PENDING, STARTED, SUCCESS, FAILURE, REVOKED), the result or error
-    of a finished task, and the progress a running one reported."""
+    of a finished task, the progress a running one reported, and when it started
+    and finished (epoch seconds; not part of equality)."""
     task_id: str
     state: str
     result: Optional[Any] = None
     error: Optional[str] = None
     progress: Optional[Dict[str, Any]] = None
+    started_at: Optional[float] = field(default=None, compare=False)
+    finished_at: Optional[float] = field(default=None, compare=False)
+
+    def ended(self, state: str, **fields: Any) -> "TaskStatus":
+        """This task's status at `state`, keeping its start and stamping its end."""
+        return TaskStatus(self.task_id, state, started_at=self.started_at, finished_at=time.time(), **fields)
 
 
 @dataclass
@@ -187,7 +195,7 @@ class TaskRunner:
                 self._pending.remove(task_id)
                 task.status = TaskStatus(task_id, REVOKED)
             elif task.status.state == STARTED:
-                task.status = TaskStatus(task_id, REVOKED)
+                task.status = task.status.ended(REVOKED)
                 process = task.process
             status = task.status
         if process is not None:
@@ -206,7 +214,7 @@ class TaskRunner:
                 process.start()
                 child_conn.close()
                 task.process = process
-                task.status = TaskStatus(task.task_id, STARTED)
+                task.status = TaskStatus(task.task_id, STARTED, started_at=time.time())
                 self._running += 1
                 threading.Thread(target=self._watch, args=(task, parent_conn), daemon=True).start()
 
@@ -228,7 +236,7 @@ class TaskRunner:
             task.process.join()
         with self._lock:
             if task.status.state == STARTED:
-                task.status = TaskStatus(task.task_id, FAILURE, error=f"worker exited with code {task.process.exitcode}")
+                task.status = task.status.ended(FAILURE, error=f"worker exited with code {task.process.exitcode}")
             self._running -= 1
         self._dispatch()
 
@@ -240,8 +248,8 @@ class TaskRunner:
             if task.status.state != STARTED:
                 return
             if kind == "progress":
-                task.status = TaskStatus(task.task_id, STARTED, progress=payload)
+                task.status = TaskStatus(task.task_id, STARTED, progress=payload, started_at=task.status.started_at)
             elif kind == "done":
-                task.status = TaskStatus(task.task_id, SUCCESS, result=payload)
+                task.status = task.status.ended(SUCCESS, result=payload)
             elif kind == "failed":
-                task.status = TaskStatus(task.task_id, FAILURE, error=payload)
+                task.status = task.status.ended(FAILURE, error=payload)

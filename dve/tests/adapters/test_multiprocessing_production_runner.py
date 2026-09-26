@@ -38,10 +38,10 @@ class _Tasks:
 def test_start_submits_the_production_with_json_payloads():
     tasks = _Tasks()
 
-    run_id = MultiprocessingProductionRunner(tasks).start(SELECTION, seed.DEFAULTS, produced_by=seed.OPERATOR, candidate=seed.CANDIDATE)
+    run_id = MultiprocessingProductionRunner(tasks).start(SELECTION, seed.DEFAULTS, produced_by=seed.OPERATOR, candidates=seed.CANDIDATES)
 
     assert run_id == seed.RUN_1
-    assert tasks.submitted == (run_production, (seed.SELECTION, SOURCES, seed.OPERATOR, seed.CANDIDATE))
+    assert tasks.submitted == (run_production, (seed.SELECTION, SOURCES, seed.OPERATOR, seed.CANDIDATES))
 
 
 @pytest.mark.parametrize("status", [
@@ -50,6 +50,7 @@ def test_start_submits_the_production_with_json_payloads():
     TaskStatus(seed.RUN_1, "SUCCESS", result={"run_id": seed.RUN_1}),
     TaskStatus(seed.RUN_1, "FAILURE", error="boom"),
     TaskStatus(seed.RUN_1, "REVOKED"),
+    TaskStatus(seed.RUN_1, "SUCCESS", result={}, started_at=100.0, finished_at=122.5),
 ])
 def test_status_and_cancel_map_every_task_status_field(status):
     tasks = _Tasks(status)
@@ -58,6 +59,9 @@ def test_status_and_cancel_map_every_task_status_field(status):
     assert MultiprocessingProductionRunner(tasks).status(seed.RUN_1) == expected
     assert MultiprocessingProductionRunner(tasks).cancel(seed.RUN_1) == expected
     assert tasks.cancelled == seed.RUN_1
+    mapped = MultiprocessingProductionRunner(tasks).status(seed.RUN_1)
+    assert (mapped.started_at, mapped.finished_at) == (status.started_at, status.finished_at)
+    assert ("started_at" in mapped.to_dict()) == (status.started_at is not None)
 
 
 def _produce(result=None):
@@ -66,12 +70,12 @@ def _produce(result=None):
     return produce
 
 
-def _run(produce, produced_by=None, candidate=None, selection=seed.SELECTION):
+def _run(produce, produced_by=None, candidates=None, selection=seed.SELECTION):
     progress = mock.Mock()
     with mock.patch.object(adapter.mdg, "produce_model_setup_data", produce), \
          mock.patch.object(adapter.mdg, "config_management_repository") as config_repo, \
          mock.patch.object(adapter.mdg, "source_code_repository") as source_repo:
-        result = run_production(seed.RUN_1, selection, SOURCES, produced_by, candidate, progress)
+        result = run_production(seed.RUN_1, selection, SOURCES, produced_by, candidates, progress)
     return result, config_repo, source_repo, progress
 
 
@@ -85,25 +89,28 @@ def test_production_rebuilds_the_sources_and_calls_mdg_with_the_run_id():
     assert source_repo.call_args.args[0] == seed.DEFAULTS[SourceType.SOURCE_CODE_REPO]
     produce.assert_called_once_with(
         config_repo.return_value, source_repo.return_value, seed.PROJECT, seed.PLATFORM, seed.VERSION,
-        run_id=seed.RUN_1, produced_by=None, candidate=None, progress=progress,
+        run_id=seed.RUN_1, produced_by=None, candidates=[], progress=progress,
     )
 
 
-def test_production_forwards_the_producer_and_converts_the_candidate():
+def test_production_forwards_the_producer_and_converts_the_candidates():
     produce = _produce()
 
-    _run(produce, produced_by=seed.OPERATOR, candidate=seed.CANDIDATE)
+    _run(produce, produced_by=seed.OPERATOR, candidates=[seed.CANDIDATE, {"unit_name": seed.NAV_APP, "version": "2.0.0"}])
 
     assert produce.call_args.kwargs["produced_by"] == seed.OPERATOR
-    assert produce.call_args.kwargs["candidate"] == CandidateUnitVersion(seed.SENSOR_APP, seed.CANDIDATE_VERSION)
+    assert produce.call_args.kwargs["candidates"] == [
+        CandidateUnitVersion(seed.SENSOR_APP, seed.CANDIDATE_VERSION),
+        CandidateUnitVersion(seed.NAV_APP, "2.0.0"),
+    ]
 
 
 def test_production_ignores_an_unusable_candidate():
     produce = _produce()
 
-    _run(produce, produced_by=seed.OPERATOR, candidate={"unit_name": seed.SENSOR_APP})
+    _run(produce, produced_by=seed.OPERATOR, candidates=[{"unit_name": seed.SENSOR_APP}, seed.CANDIDATE])
 
-    assert produce.call_args.kwargs["candidate"] is None
+    assert produce.call_args.kwargs["candidates"] == [CandidateUnitVersion(seed.SENSOR_APP, seed.CANDIDATE_VERSION)]
 
 
 def test_production_refuses_an_incomplete_selection():

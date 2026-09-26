@@ -17,7 +17,7 @@ Endpoints:
   GET    /api/projects/.../versions/<version_id>/mdg-files/<run_id>/model                                [login + config_mgmt_db]
   GET    /api/projects/.../versions/<version_id>/mdg-files/<run_id>/download                             [login + config_mgmt_db]
   GET    /api/units/<unit_name>/versions                                                                 [login + source_code_repo]
-  POST   /api/mdg/run                                  selection fields + "candidate"?                   [login + both]
+  POST   /api/mdg/run                                  selection fields + "candidates"?                  [login + both]
   GET    /api/mdg/tasks/<task_id>?after=<line>                                                           [login]
   POST   /api/mdg/tasks/<task_id>/cancel                                                                 [login]
 
@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import functools
 import logging
+import time
 from datetime import timedelta
 
 from flask import Flask, jsonify, render_template, request, send_file, session
@@ -64,17 +65,27 @@ def _json_body(*required: str):
     return body, None
 
 
-def _candidate(body: dict):
-    """The candidate unit version in the body (SRS DSM-MDG req 11): None when absent, a 400 response when malformed."""
-    candidate = body.get("candidate")
-    if candidate is None:
-        return None, None
-    if not isinstance(candidate, dict):
-        return None, _error("candidate must be a JSON object", 400)
-    missing = [field for field in _CANDIDATE_FIELDS if not candidate.get(field)]
-    if missing:
-        return None, _error(f"candidate missing field(s): {', '.join(missing)}", 400)
-    return {field: candidate[field] for field in _CANDIDATE_FIELDS}, None
+def _candidates(body: dict):
+    """The candidate unit versions in the body (SRS DSM-MDG req 11): an empty list
+    when absent, a 400 response when malformed or naming a unit twice."""
+    candidates = body.get("candidates")
+    if candidates is None:
+        return [], None
+    if not isinstance(candidates, list):
+        return None, _error("candidates must be a JSON array", 400)
+    chosen = []
+    for index, candidate in enumerate(candidates):
+        if not isinstance(candidate, dict):
+            return None, _error(f"candidates[{index}] must be a JSON object", 400)
+        missing = [field for field in _CANDIDATE_FIELDS if not candidate.get(field)]
+        if missing:
+            return None, _error(f"candidates[{index}] missing field(s): {', '.join(missing)}", 400)
+        chosen.append({field: candidate[field] for field in _CANDIDATE_FIELDS})
+    names = [candidate["unit_name"] for candidate in chosen]
+    repeated = sorted({name for name in names if names.count(name) > 1})
+    if repeated:
+        return None, _error(f"candidates name a unit twice: {', '.join(repeated)}", 400)
+    return chosen, None
 
 
 def login_required(view):
@@ -264,13 +275,13 @@ def create_app(runtime: Runtime | None = None) -> Flask:
         body, error = _json_body(*Selection.FIELDS)
         if error:
             return error
-        candidate, error = _candidate(body)
+        candidates, error = _candidates(body)
         if error is not None:
             return error
         selection = Selection.from_dict(body)
         try:
             task_id = runtime.production_runner.start(
-                selection, sources(), produced_by=session["username"], candidate=candidate
+                selection, sources(), produced_by=session["username"], candidates=candidates
             )
         except Exception as exc:
             logger.warning("mdg/run: submission failed: %s", exc)
@@ -302,7 +313,8 @@ def create_app(runtime: Runtime | None = None) -> Flask:
         except Exception as exc:
             logger.warning("mdg/tasks/%s: state read failed: %s", task_id, exc)
             return _error(str(exc), 502)
-        return jsonify({**status.to_dict(), "lines": lines})
+        # `now` lets the client measure elapsed time against the server's clock.
+        return jsonify({**status.to_dict(), "lines": lines, "now": time.time()})
 
     return app
 

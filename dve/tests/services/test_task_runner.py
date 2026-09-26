@@ -53,6 +53,7 @@ def test_a_task_carries_its_result_and_its_log_lines_on_success(runner, log):
     status = wait_until(finished(runner, task_id))
 
     assert status == TaskStatus(task_id, "SUCCESS", result={"task_id": task_id})
+    assert isinstance(status.started_at, float) and status.finished_at >= status.started_at
     lines = wait_until(lambda: log.lines_since(task_id, 0))
     assert re.fullmatch(r"\d{2}:\d{2}:\d{2} INFO     hello from child", lines[0])
 
@@ -73,8 +74,11 @@ def test_progress_is_reported_while_running_and_cancel_terminates_the_task(runne
     task_id = runner.submit(scripted_task, "sleep")
     wait_until(lambda: runner.status(task_id).progress)
     assert runner.status(task_id) == TaskStatus(task_id, "STARTED", progress={"percent": 42, "phase": "clone"})
+    assert runner.status(task_id).started_at is not None and runner.status(task_id).finished_at is None
 
-    assert runner.cancel(task_id) == TaskStatus(task_id, "REVOKED")
+    revoked = runner.cancel(task_id)
+    assert revoked == TaskStatus(task_id, "REVOKED")
+    assert revoked.finished_at >= revoked.started_at
 
     process = runner._tasks[task_id].process
     wait_until(lambda: not process.is_alive())

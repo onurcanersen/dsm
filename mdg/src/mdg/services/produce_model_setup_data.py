@@ -7,7 +7,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from mdg.domain.data_source import SourceType
 from mdg.domain.error_record import DataAcquisitionError, ErrorRecord, ErrorStatus
@@ -35,12 +35,14 @@ ProgressCallback = Callable[[int, str], None]
 @dataclass(frozen=True)
 class ProductionResult:
     """The outcome of one run: the file saved, each inventory unit's status,
-    the graph scale, the candidate and the errors recorded."""
+    the graph scale, how many files were acquired, the candidates and the
+    errors recorded."""
     run_id: str
     file: Path
     units: List[Tuple[SoftwareUnitVersion, UnitStatus]]
     scale: Dict[str, int]
-    candidate: Optional[CandidateUnitVersion]
+    acquired_files: int
+    candidates: List[CandidateUnitVersion]
     errors: List[ErrorRecord]
 
     def to_dict(self) -> Dict[str, Any]:
@@ -49,7 +51,8 @@ class ProductionResult:
             "file": str(self.file),
             "units": [{**unit.to_dict(), "status": status.value} for unit, status in self.units],
             "scale": self.scale,
-            "candidate": self.candidate.to_dict() if self.candidate else None,
+            "acquired_files": self.acquired_files,
+            "candidates": [candidate.to_dict() for candidate in self.candidates],
             "errors": [e.to_dict() for e in self.errors],
         }
 
@@ -65,7 +68,11 @@ class _Progress:
     def advance(self, phase: str) -> None:
         self._done += 1
         if self._report is not None:
-            self._report(100 * self._done // self._total, phase)
+            self._report(min(100, 100 * self._done // self._total), phase)
+
+    def retotal(self, total: int) -> None:
+        """Corrects the total once the work is known; the percent never falls back."""
+        self._total = max(total, self._done)
 
 
 class ProduceModelSetupData:
@@ -112,13 +119,13 @@ class ProduceModelSetupData:
         version_id: str,
         run_id: str,
         produced_by: Optional[str] = None,
-        candidate: Optional[CandidateUnitVersion] = None,
+        candidates: Sequence[CandidateUnitVersion] = (),
         progress: Optional[ProgressCallback] = None,
     ) -> ProductionResult:
         if self._run_regenerate_code:
             self._build_runner.ensure_available()
         context = self._acquire_context.execute(project_id, platform_id, version_id)
-        inventory = self._build_inventory.execute(context, candidate)
+        inventory = self._build_inventory.execute(context, candidates)
         run_dir = self._workspace.run_dir(project_id, platform_id, version_id, run_id)
         run_dir.mkdir(parents=True, exist_ok=True)
         logger.info("produce: %s/%s/%s run %s", project_id, platform_id, version_id, run_id)
@@ -127,11 +134,17 @@ class ProduceModelSetupData:
         if system_unit is None:
             raise DataAcquisitionError(self._missing(f"system repo '{self._system_repo_name}' is not in the inventory", self._system_repo_name, context))
         inventory = inventory.without(system_unit.unit_name)
+        # Context, the system repo cloned and parsed, every unit cloned and parsed, and
+        # the file saved; the inventory bounds the units until the system repo names them.
+        steps = _Progress(progress, total=4 + 2 * len(inventory.units))
+        steps.advance("context")
         system = self._acquire.execute(system_unit, run_dir, context, mandatory=False)
         if system.unit_dir is None:
             raise DataAcquisitionError(system.errors[0])
+        steps.advance("system")
         parser = self._system_repo_parser(system.unit_dir, context.project.name, context.platform.name)
         app_node_relations = parser.get_app_node_relation()
+        steps.advance("system")
 
         files, errors = list(system.files), list(system.errors)
         units: List[SoftwareUnitVersion] = []
@@ -141,8 +154,7 @@ class ProduceModelSetupData:
                 errors.append(self._missing(f"application '{app_name}' is not in the inventory", app_name, context))
             else:
                 units.append(unit)
-        steps = _Progress(progress, total=2 * len(units) + 2)
-        steps.advance("system")
+        steps.retotal(4 + 2 * len(units))
 
         acquisitions: List[Acquisition] = []
         for unit in units:
@@ -180,7 +192,8 @@ class ProduceModelSetupData:
             file=path,
             units=[(u, status_by_unit.get(u.unit_name, UnitStatus.NOT_ACQUIRED)) for u in inventory.units],
             scale=data.scale,
-            candidate=candidate,
+            acquired_files=len(files),
+            candidates=list(candidates),
             errors=errors,
         )
 

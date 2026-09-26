@@ -38,7 +38,7 @@ def test_save_writes_the_selection_named_file_in_the_run_dir(tmp_path: Path):
     assert json.loads(path.read_text(encoding="utf-8")) == data.to_dict()
 
 
-def test_list_is_newest_first_with_producer_and_candidate(tmp_path: Path):
+def test_list_is_newest_first_with_producer_and_candidates(tmp_path: Path):
     _write(tmp_path, seed.RUN_1, "2026-09-01T09:02:00", produced_by="admin")
     _write(tmp_path, seed.RUN_2, "2026-09-02T14:15:30", produced_by=seed.PRODUCER, units=[
         {"unit_name": seed.SENSOR_APP, "version": seed.CANDIDATE_VERSION, "is_candidate": True},
@@ -48,8 +48,8 @@ def test_list_is_newest_first_with_producer_and_candidate(tmp_path: Path):
 
     assert [r.run_id for r in records] == [seed.RUN_2, seed.RUN_1]
     assert records[0].produced_by == seed.PRODUCER
-    assert records[0].candidate == {"unit_name": seed.SENSOR_APP, "version": seed.CANDIDATE_VERSION}
-    assert records[1].candidate is None
+    assert records[0].candidates == [{"unit_name": seed.SENSOR_APP, "version": seed.CANDIDATE_VERSION}]
+    assert records[1].candidates == []
     assert records[0].scale == {"apps": 2}
 
 

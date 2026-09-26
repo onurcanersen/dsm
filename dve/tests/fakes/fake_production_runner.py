@@ -14,11 +14,11 @@ from dve.ports.production_runner import IProductionRunner
 
 
 class FakeProductionRunner(IProductionRunner):
-    """Records every start as (selection, sources, produced_by, candidate);
+    """Records every start as (selection, sources, produced_by, candidates);
     `states` are statuses reported in order before the recorded outcome."""
 
     def __init__(self, run: Optional[Callable[..., dict]] = None, states: List[Union[str, ProductionStatus]] = ()):
-        self._run = run or (lambda selection, sources, produced_by, candidate: {"selection": selection.to_dict()})
+        self._run = run or (lambda selection, sources, produced_by, candidates: {"selection": selection.to_dict()})
         self._states = list(states)
         self._reported = 0
         self._runs: Dict[str, ProductionStatus] = {}
@@ -29,12 +29,12 @@ class FakeProductionRunner(IProductionRunner):
         selection: Selection,
         sources: Dict[SourceType, DataSourceConfig],
         produced_by: Optional[str] = None,
-        candidate: Optional[dict] = None,
+        candidates: Optional[List[dict]] = None,
     ) -> str:
         run_id = uuid.uuid4().hex
-        self.started.append((selection, sources, produced_by, candidate))
+        self.started.append((selection, sources, produced_by, candidates))
         try:
-            result = self._run(selection, sources, produced_by, candidate)
+            result = self._run(selection, sources, produced_by, candidates)
         except Exception as exc:
             self._runs[run_id] = ProductionStatus(run_id, "FAILURE", error=str(exc) or repr(exc))
         else:

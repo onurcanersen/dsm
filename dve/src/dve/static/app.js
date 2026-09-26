@@ -43,7 +43,6 @@
   var SOURCES = [
     {
       key: "config_mgmt_db",
-      name: "CMDB Data",
       title: "Configuration Management DB",
       icon: "lucide-database",
       endpoint: "/api/data-sources/connect/config-mgmt-db",
@@ -52,7 +51,6 @@
     },
     {
       key: "source_code_repo",
-      name: "SW Units & Scripts",
       title: "Source Code Repository",
       icon: "lucide-file-code",
       endpoint: "/api/data-sources/connect/source-code-repo",
@@ -64,11 +62,16 @@
   // Per-card header: the product's name and logo, or the card's own title and glyph.
   var HEADERS = {
     login: { logo: true, subtitle: "Secure Access" },
-    sources: { title: "Data Sources", icon: "lucide-hard-drive", subtitle: "Connect Sources" },
-    select: { title: "Project Context", icon: "lucide-network", subtitle: "Select Scope" },
-    inventory: { title: "Software Unit Inventory", icon: "lucide-package" },
-    files: { title: "Model Setup Data", icon: "lucide-file-code", subtitle: "Produced Files" },
-    run: { title: "Model Setup Data", subtitle: "Production Run" },
+    sources: { title: "Data Sources", icon: "lucide-hard-drive", subtitle: "Select a source to enter its credentials" },
+    select: { title: "Project Context", icon: "lucide-network", subtitle: "Choose the project, platform and system version" },
+    inventory: {
+      title: "Software Unit Inventory",
+      icon: "lucide-package",
+      subtitle: "Select candidate versions, or produce with no change"
+    },
+    files: { title: "Model Setup Data", icon: "lucide-file-code", subtitle: "Open a previously produced file or produce a new one" },
+    // The run card: the product's name over the context line and the console.
+    run: { title: "Model Setup Data" },
     model: { title: "Core System Model" }
   };
 
@@ -102,10 +105,13 @@
     versions: null,
     // The saved {view, model_file} read on boot to choose the card to resume on.
     ui: null,
-    // The run being tracked: {task_id, project_id, platform_id, version_id, candidate}.
+    // The run being tracked: {task_id, project_id, platform_id, version_id, candidates}.
     activeTask: null,
-    // The unit version under evaluation, {unit_name, version}, or null (SRS DSM-MDG req 11).
-    candidate: null,
+    // The last run that ended for this selection, {task_id, project_id, platform_id,
+    // version_id, seen}; its console is rebuilt from the server on boot.
+    lastRun: null,
+    // The unit versions under evaluation, unit name to version (SRS DSM-MDG req 11).
+    candidates: {},
     // The produced files of the selection, newest first; null until asked.
     files: null,
     // The produced file the model card shows, and that file once read.
@@ -176,6 +182,7 @@
     el.shell.classList.toggle("shell--run", name === "run");
     el.shell.classList.toggle("shell--model", name === "model");
     renderSessionbar(STAGES.indexOf(name) !== -1);
+    renderRunIndicator();
 
     var focusTarget = {
       login: el.username,
@@ -195,6 +202,7 @@
       return;
     }
     var scoped = allConnected() && !!state.selection;
+    el.stages.run.item.toggleAttribute("data-live", runIsLive());
     STAGES.forEach(function (key, index) {
       var drawn = index < current ? "done" : index === current ? "current" : "todo";
       el.stages[key].item.setAttribute("data-state", drawn);
@@ -209,6 +217,7 @@
 
   function renderHeader(header) {
     el.title.textContent = header.title || PRODUCT_TITLE;
+    el.title.hidden = !!header.bare;
     el.subtitle.textContent = header.subtitle || "";
     el.subtitle.hidden = !header.subtitle;
     el.logo.hidden = !header.logo;
@@ -287,9 +296,33 @@
     state.selection = saved.selection || null;
     // A run that no longer matches the saved selection is not shown.
     state.activeTask = tracks(saved.active_task, state.selection) ? saved.active_task : null;
+    state.lastRun = !state.activeTask && tracks(saved.last_run, state.selection) ? saved.last_run : null;
+    runResultUnseen = !!state.lastRun && !state.lastRun.seen;
     state.ui = { view: saved.view || null, model_file: saved.model_file || null };
-    // A run in flight owns the candidate it evaluates (SRS DSM-MDG req 11).
-    state.candidate = state.activeTask ? state.activeTask.candidate || null : saved.candidate || null;
+    // A run in flight owns the candidates it evaluates (SRS DSM-MDG req 11).
+    state.candidates = candidateMap(state.activeTask ? state.activeTask.candidates : savedCandidates(saved));
+  }
+
+  // Saved state from before several candidates were possible held one under `candidate`.
+  function savedCandidates(saved) {
+    return saved.candidates || (saved.candidate ? [saved.candidate] : []);
+  }
+
+  function candidateMap(list) {
+    var map = {};
+    (list || []).forEach(function (candidate) {
+      if (candidate && candidate.unit_name && candidate.version) {
+        map[candidate.unit_name] = candidate.version;
+      }
+    });
+    return map;
+  }
+
+  // The candidates as the API takes them, in inventory order.
+  function candidateList() {
+    return Object.keys(state.candidates).map(function (unitName) {
+      return { unit_name: unitName, version: state.candidates[unitName] };
+    });
   }
 
   function tracks(task, selection) {
@@ -310,6 +343,7 @@
     state.selection = null;
     state.versions = null;
     state.activeTask = null;
+    state.lastRun = null;
     state.ui = null;
     candidateVersions = {};
     forgetContext();
@@ -326,9 +360,10 @@
       JSON.stringify({
         selection: state.selection,
         active_task: state.activeTask,
+        last_run: state.lastRun,
         view: state.view,
         model_file: state.modelFile ? state.modelFile.run_id : null,
-        candidate: state.candidate || null
+        candidates: candidateList()
       })
     );
   }
@@ -369,6 +404,7 @@
           return;
         }
         adopt(session);
+        ensureRunPoll();
         if (!allConnected()) {
           enterSources();
           return;
@@ -403,9 +439,9 @@
       tile.type = "button";
       tile.className = "source__tile";
       tile.setAttribute("data-source", source.key);
-      tile.setAttribute("aria-label", source.name + (connected ? ", connected" : ", not connected"));
+      tile.setAttribute("aria-label", source.title + (connected ? ", connected" : ", not connected"));
       tile.appendChild(icon);
-      tile.appendChild(span("source__name", source.name));
+      tile.appendChild(span("source__name", source.title));
       tile.addEventListener("click", function () {
         openModal(source, tile);
       });
@@ -542,7 +578,7 @@
         if (next) {
           next.focus();
         }
-        setMessage("sources", "ok", source.name + " connected.");
+        setMessage("sources", "ok", source.title + " connected.");
       })
       .catch(function (error) {
         setBusy(el.modalSubmit, false, "Connecting", "Connect");
@@ -632,7 +668,7 @@
 
   // A tracked run outranks the landing card.
   function resumeRunOrFiles() {
-    return state.activeTask ? enterRunConsole() : enterFiles();
+    return state.activeTask || state.lastRun ? enterRunConsole() : enterFiles();
   }
 
   function fileByRun(runId) {
@@ -765,11 +801,6 @@
     el.selectSubmit.disabled = !(el.project.value && el.platform.value && el.version.value);
   }
 
-  function selectedText(select) {
-    var chosen = select.options[select.selectedIndex];
-    return chosen ? chosen.textContent : "";
-  }
-
   /* ----------------------------------------------------------- inventory */
 
   /* The Software Unit Version Inventory of the confirmed context (SRS DSM-MDG req 10). */
@@ -781,14 +812,13 @@
 
   function enterInventory() {
     setMessage("inventory", null, "");
-    renderContextLine();
     renderUnits(allUnits);
-    drawCandidateControl();
     showView("inventory");
     el.unitList.scrollTop = unitScroll;
     return loadUnits()
-      .then(function () {
-        drawCandidateControl();
+      .then(function (units) {
+        dropStrayCandidates();
+        drawUnits();
         el.unitList.scrollTop = unitScroll;
       })
       .catch(function (error) {
@@ -796,7 +826,6 @@
           return;
         }
         renderUnits([]);
-        drawCandidateControl();
         setMessage("inventory", "error", error.message);
       });
   }
@@ -812,8 +841,22 @@
     state.files = null;
     state.modelFile = null;
     state.model = null;
-    state.candidate = null;
+    state.candidates = {};
     forgetInventory();
+    forgetFinishedRun();
+  }
+
+  // A finished run's console belongs to the selection it ran for.
+  function forgetFinishedRun() {
+    if (state.activeTask) {
+      return;
+    }
+    runResultUnseen = false;
+    state.lastRun = null;
+    if (runState !== null) {
+      resetConsole();
+      setRunState(null, null);
+    }
   }
 
   function loadUnits() {
@@ -823,24 +866,13 @@
     });
   }
 
-  // The confirmed context as a labelled strip above the list.
-  function renderContextLine() {
-    var version = selectedVersion();
-    el.contextProject.textContent = selectedText(el.project);
-    el.contextPlatform.textContent = selectedText(el.platform);
-    el.contextVersion.textContent = version ? version.label : selectedText(el.version);
-    el.contextCurrent.hidden = !(version && version.is_effective);
-  }
-
-  function selectedVersion() {
-    var id = el.version.value;
-    var versions = state.versions || [];
-    for (var i = 0; i < versions.length; i++) {
-      if (versions[i].version_id === id) {
-        return versions[i];
-      }
-    }
-    return null;
+  // A context cell shows its value; its tooltip names key and full value, so a
+  // value cut by the ellipsis is still readable on hover.
+  function fillContext(valueNode, text) {
+    valueNode.textContent = text;
+    var cell = valueNode.parentNode;
+    var key = cell.querySelector(".context__key");
+    cell.title = key ? key.textContent + ": " + text : text;
   }
 
   // units: null while in flight, [] for none recorded, otherwise the rows.
@@ -889,30 +921,35 @@
     }
 
     shown.forEach(function (unit) {
-      // The candidate is overlaid at draw time, so allUnits stays the database's answer.
-      var candidate = candidateFor(unit.unit_name);
+      // Candidates are overlaid at draw time, so allUnits stays the database's answer.
       var row = document.createElement("div");
       row.className = "units__row";
+      row.setAttribute("data-unit", unit.unit_name);
       row.appendChild(span("units__name", unit.unit_name));
-      if (candidate || unit.is_candidate) {
+      if (candidateVersionOf(unit.unit_name) || unit.is_candidate) {
         row.appendChild(span("units__badge", "Candidate"));
       }
-      row.appendChild(span("units__version", candidate ? candidate.version : unit.version));
+      row.appendChild(rowPicker(unit));
       el.unitList.appendChild(row);
+      paintRowPicker(unit.unit_name);
     });
+    summarizeCandidates();
   }
 
-  function candidateFor(unitName) {
-    return state.candidate && state.candidate.unit_name === unitName ? state.candidate : null;
+  function candidateVersionOf(unitName) {
+    return state.candidates[unitName] || null;
   }
 
-  /* ------------------------------------------------------- candidate */
+  /* ------------------------------------------------------- candidates */
 
-  /* The unit version being evaluated for installation, one unit at a time
-   * (SRS DSM-MDG req 11). Its versions come from the source repository. */
+  /* The unit versions being evaluated for installation, chosen per row
+   * (SRS DSM-MDG req 11). The versions come from the source repository. */
 
-  // Versions per unit as the repository last reported them.
+  // Versions per unit as the repository last reported them; null when the request
+  // failed. Read only when a row's dropdown is opened: each read is a git call.
   var candidateVersions = {};
+  // The reads in flight, by unit name.
+  var versionReads = {};
 
   function baselineVersion(unitName) {
     var row = unitRow(unitName);
@@ -929,26 +966,18 @@
     return null;
   }
 
-  function drawCandidateControl() {
-    var units = allUnits || [];
-    // A candidate naming a unit outside this inventory is dropped once the inventory has arrived.
-    if (allUnits && state.candidate && !unitRow(state.candidate.unit_name)) {
-      state.candidate = null;
-    }
-
-    el.candidateUnit.textContent = "";
-    el.candidateUnit.appendChild(option("", "—"));
-    units.forEach(function (unit) {
-      el.candidateUnit.appendChild(option(unit.unit_name, unit.unit_name));
+  // Candidates naming units outside this inventory are dropped once it has arrived.
+  function dropStrayCandidates() {
+    var dropped = false;
+    Object.keys(state.candidates).forEach(function (unitName) {
+      if (!unitRow(unitName)) {
+        delete state.candidates[unitName];
+        dropped = true;
+      }
     });
-    el.candidateUnit.disabled = !units.length;
-    el.candidateUnit.value = state.candidate ? state.candidate.unit_name : "";
-
-    if (!el.candidateUnit.value) {
-      clearVersionPicker();
-      return;
+    if (dropped) {
+      saveUserState();
     }
-    fillVersionPicker(el.candidateUnit.value);
   }
 
   function option(value, label) {
@@ -958,99 +987,157 @@
     return node;
   }
 
-  function clearVersionPicker() {
-    el.candidateVersion.textContent = "";
-    el.candidateVersion.appendChild(option("", "—"));
-    setPickerEnabled(el.pickerCandidateVersion, el.candidateVersion, false);
-    setVersionPickerLoading(false);
-    setCandidateNote("");
-  }
-
-  function setVersionPickerLoading(loading) {
-    el.pickerCandidateVersion.classList.toggle("picker--loading", !!loading);
-  }
-
   function setCandidateNote(text, isError) {
     el.candidateNote.textContent = text;
     el.candidateNote.classList.toggle("candidate__note--error", !!isError);
   }
 
-  // Offers the inventory's version alongside the ones the repository publishes.
-  function fillVersionPicker(unitName) {
-    var known = candidateVersions[unitName];
-    if (known) {
-      paintVersionPicker(unitName, known);
-      return Promise.resolve(known);
+  // The note says how many units are at candidate versions, unless an error owns it.
+  function summarizeCandidates() {
+    if (el.candidateNote.classList.contains("candidate__note--error")) {
+      return;
     }
-    el.candidateVersion.textContent = "";
-    el.candidateVersion.appendChild(option("", "—"));
-    setPickerEnabled(el.pickerCandidateVersion, el.candidateVersion, false);
-    setCandidateNote("");
-    setVersionPickerLoading(true);
-    return request("GET", unitVersionsUrl(unitName))
-      .then(function (payload) {
-        candidateVersions[unitName] = payload.versions || [];
-        // The user may have moved on while this was in flight.
-        if (el.candidateUnit.value === unitName) {
-          paintVersionPicker(unitName, candidateVersions[unitName]);
-        }
-        return candidateVersions[unitName];
-      })
-      .catch(function (error) {
-        if (!handleExpired(error) && el.candidateUnit.value === unitName) {
-          setVersionPickerLoading(false);
-          setCandidateNote(error.message, true);
-        }
-        return [];
-      });
+    var count = Object.keys(state.candidates).length;
+    setCandidateNote(
+      !count ? "" : count === 1 ? "1 unit at a candidate version." : count + " units at candidate versions."
+    );
   }
 
-  function paintVersionPicker(unitName, versions) {
-    var baseline = baselineVersion(unitName);
-    var candidate = candidateFor(unitName);
+  // The row's version control: the version and an edit icon until the unit's
+  // versions are read; a native select holding them from then on.
+  function rowPicker(unit) {
+    var host = document.createElement("div");
+    host.className = "vedit";
+    host.setAttribute("data-unit", unit.unit_name);
+    return host;
+  }
 
-    el.candidateVersion.textContent = "";
+  function unitRowNode(unitName) {
+    var rows = el.unitList.querySelectorAll(".units__row");
+    for (var i = 0; i < rows.length; i++) {
+      if (rows[i].getAttribute("data-unit") === unitName) {
+        return rows[i];
+      }
+    }
+    return null;
+  }
+
+  // Rebuilds the row's control from what is known: the edit icon (spinning while
+  // the read runs, red after a failure) or the select with the versions read.
+  function paintRowPicker(unitName, focusSelect) {
+    var row = unitRowNode(unitName);
+    if (!row) {
+      return;
+    }
+    var host = row.querySelector(".vedit");
+    var versions = candidateVersions[unitName];
+    host.textContent = "";
+    host.classList.toggle("vedit--loading", !!versionReads[unitName]);
+    host.classList.toggle("vedit--failed", versions === null);
+    host.title = versions === null ? "The published versions of " + unitName + " could not be read. Click to retry." : "";
+
+    if (!Array.isArray(versions)) {
+      host.appendChild(span("vedit__value", candidateVersionOf(unitName) || baselineVersion(unitName)));
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "vedit__button";
+      button.setAttribute("aria-label", "Choose a version for " + unitName);
+      var pencil = document.createElement("i");
+      pencil.className = "lucide lucide-pencil";
+      button.appendChild(pencil);
+      var spinner = span("spinner vedit__spinner", "");
+      spinner.setAttribute("aria-label", "Reading published versions");
+      button.appendChild(spinner);
+      button.addEventListener("click", function () {
+        readVersions(unitName);
+      });
+      host.appendChild(button);
+      return;
+    }
+
+    var picker = document.createElement("div");
+    picker.className = "picker picker--inline";
+    var control = document.createElement("div");
+    control.className = "picker__control";
+    var select = document.createElement("select");
+    select.setAttribute("aria-label", "Version of " + unitName);
+    var baseline = baselineVersion(unitName);
+    var chosen = candidateVersionOf(unitName);
     // Choosing the inventory's own version is how a candidate is taken back.
-    el.candidateVersion.appendChild(option(baseline, baseline + " · no change"));
+    select.appendChild(option(baseline, baseline));
     versions.forEach(function (version) {
       if (version !== baseline) {
-        el.candidateVersion.appendChild(option(version, version));
+        select.appendChild(option(version, version));
       }
     });
     // A chosen candidate the repository no longer publishes stays listed.
-    if (candidate && !hasOption(el.candidateVersion, candidate.version)) {
-      el.candidateVersion.appendChild(option(candidate.version, candidate.version));
+    if (chosen && !hasOption(select, chosen)) {
+      select.appendChild(option(chosen, chosen));
     }
+    select.value = chosen || baseline;
+    select.addEventListener("change", function () {
+      onRowVersionChange(unitName, select.value);
+    });
+    var chevron = document.createElement("i");
+    chevron.className = "lucide lucide-chevron-down";
+    control.appendChild(select);
+    control.appendChild(chevron);
+    picker.appendChild(control);
+    host.appendChild(picker);
 
-    el.candidateVersion.value = candidate ? candidate.version : baseline;
-    setVersionPickerLoading(false);
-    setPickerEnabled(el.pickerCandidateVersion, el.candidateVersion, true);
-    setCandidateNote(versions.length ? "" : "The source repository publishes no versions for " + unitName + ".");
+    var empty = !versions.length && !chosen;
+    setPickerEnabled(picker, select, !empty);
+    host.title = empty ? "The source repository publishes no versions for " + unitName + "." : "";
+    if (focusSelect && !empty) {
+      select.focus();
+    }
   }
 
-  function onCandidateUnitChange() {
-    var unitName = el.candidateUnit.value;
-    // Switching units drops the candidate.
-    if (!state.candidate || state.candidate.unit_name !== unitName) {
-      state.candidate = null;
-      drawUnits();
-      saveUserState();
+  // Reads a unit's published versions once, painting its row before and after.
+  function readVersions(unitName) {
+    if (versionReads[unitName]) {
+      return versionReads[unitName];
     }
-    if (!unitName) {
-      clearVersionPicker();
-      return;
-    }
-    fillVersionPicker(unitName);
+    setCandidateNote("");
+    summarizeCandidates();
+    versionReads[unitName] = request("GET", unitVersionsUrl(unitName))
+      .then(function (payload) {
+        candidateVersions[unitName] = payload.versions || [];
+      })
+      .catch(function (error) {
+        if (!handleExpired(error)) {
+          candidateVersions[unitName] = null;
+          setCandidateNote(error.message, true);
+        }
+      })
+      .then(function () {
+        delete versionReads[unitName];
+        paintRowPicker(unitName, true);
+        return candidateVersions[unitName];
+      });
+    paintRowPicker(unitName);
+    return versionReads[unitName];
   }
 
-  function onCandidateVersionChange() {
-    var unitName = el.candidateUnit.value;
-    var version = el.candidateVersion.value;
-    state.candidate =
-      unitName && version && version !== baselineVersion(unitName)
-        ? { unit_name: unitName, version: version }
-        : null;
-    drawUnits();
+  // The row's version was changed: the inventory's own version takes the candidate back.
+  function onRowVersionChange(unitName, version) {
+    if (!version || version === baselineVersion(unitName)) {
+      delete state.candidates[unitName];
+    } else {
+      state.candidates[unitName] = version;
+    }
+    var row = unitRowNode(unitName);
+    if (row) {
+      var badge = row.querySelector(".units__badge");
+      var unit = unitRow(unitName);
+      var marked = !!candidateVersionOf(unitName) || !!(unit && unit.is_candidate);
+      if (marked && !badge) {
+        row.insertBefore(span("units__badge", "Candidate"), row.querySelector(".vedit"));
+      } else if (!marked && badge) {
+        row.removeChild(badge);
+      }
+    }
+    summarizeCandidates();
     saveUserState();
   }
 
@@ -1071,31 +1158,86 @@
   var runPollLastStatus = null;
   // The index of the last line the console holds; null means replay from the top.
   var runPollLastId = null;
+  // The last percent shown, for the indicator on other views.
+  var runPercent = null;
+  // A run ended while another view was showing, and its console has not been opened since.
+  var runResultUnseen = false;
+  // Elapsed seconds as the last poll measured them, and when (performance clock) they were measured.
+  var runElapsedBase = null;
+  var runElapsedAt = 0;
+  var runElapsedTimer = null;
+  // The cursor blinking at the log's end while the run goes.
+  var consoleCursor = null;
+
+  // The run card's context line: the selection as the pickers name it.
+  function renderRunContext() {
+    var version = selectedVersion();
+    fillContext(el.runProject, selectedText(el.project));
+    fillContext(el.runPlatform, selectedText(el.platform));
+    fillContext(el.runVersion, version ? version.label : selectedText(el.version));
+    el.runCurrent.hidden = !(version && version.is_effective);
+  }
+
+  function selectedText(select) {
+    var chosen = select.options[select.selectedIndex];
+    return chosen ? chosen.textContent : "";
+  }
+
+  function selectedVersion() {
+    var id = el.version.value;
+    var versions = state.versions || [];
+    for (var i = 0; i < versions.length; i++) {
+      if (versions[i].version_id === id) {
+        return versions[i];
+      }
+    }
+    return null;
+  }
 
   // The Produce step: the tracked run's console, or the inventory that starts one.
+  // The Produce step: the tracked run's console, the last finished run's console
+  // while this selection holds, or the inventory that starts the first run.
   function enterProduce() {
-    return state.activeTask ? enterRunConsole() : enterInventory();
+    var finished = !!state.lastRun || (!!runState && RUN_TERMINAL[runState]);
+    return state.activeTask || finished ? enterRunConsole() : enterInventory();
   }
 
   function enterFiles() {
-    var live = !!state.activeTask && runState !== null && !RUN_TERMINAL[runState];
-    setMessage("files", null, live ? "A production run is already in progress." : "");
+    setMessage("files", null, "");
     showView("files");
     loadFiles();
   }
 
   function enterRunConsole() {
-    setMessage("run", null, "");
-    var task = state.activeTask;
-    resetConsole();
-    if (!task) {
+    renderRunContext();
+    if (state.activeTask || state.lastRun) {
+      // A poll already following or rebuilding this run keeps its console; otherwise one starts.
+      ensureRunPoll();
+    } else if (!(runState && RUN_TERMINAL[runState])) {
+      setMessage("run", null, "");
+      resetConsole();
       setRunState(null, null);
-      showView("run");
+    }
+    // A finished console stays as it ended: its lines, badges, message and outcome.
+    runResultUnseen = false;
+    if (state.lastRun && !state.lastRun.seen) {
+      state.lastRun.seen = true;
+      saveUserState();
+    }
+    showView("run");
+  }
+
+  // Follows the tracked run from any view, so the state is known everywhere.
+  function ensureRunPoll() {
+    // The run going, or else the run that last ended, whose console is rebuilt once.
+    var task = state.activeTask || (state.lastRun && runState === null ? state.lastRun : null);
+    if (!task || runPollTaskId === task.task_id) {
       return;
     }
     // Re-attaching: an empty cursor replays the run's lines from the store.
+    setMessage("run", null, "");
+    resetConsole();
     setRunState("PENDING", null);
-    showView("run");
     openRunPoll(task.task_id);
   }
 
@@ -1153,10 +1295,10 @@
     main.appendChild(span("filerow__when", generatedAt(file.generated_at)));
     main.appendChild(span("filerow__by", file.produced_by || "unknown"));
     main.appendChild(span("filerow__scale", scaleSummary(file.scale)));
-    // A file produced with a candidate says which (SRS DSM-MDG req 11).
-    if (file.candidate) {
-      main.appendChild(span("units__badge", file.candidate.unit_name + " " + file.candidate.version));
-    }
+    // A file produced with candidates says which (SRS DSM-MDG req 11).
+    (file.candidates || []).forEach(function (candidate) {
+      main.appendChild(span("units__badge", candidate.unit_name + " " + candidate.version));
+    });
 
     var go = document.createElement("i");
     go.className = "lucide lucide-arrow-right filerow__go";
@@ -1188,6 +1330,7 @@
   }
 
   function wireRun() {
+    el.runIndicator.addEventListener("click", enterProduce);
     el.filesPrimary.addEventListener("click", enterInventory);
     el.runStart.addEventListener("click", startRun);
     el.runModel.addEventListener("click", enterModel);
@@ -1211,6 +1354,8 @@
   // A new run from the inventory card: the console opens as queued and submits.
   function startNewRun() {
     closeRunPoll();
+    runResultUnseen = false;
+    renderRunContext();
     setRunState("PENDING", null);
     showView("run");
     startRun();
@@ -1225,17 +1370,19 @@
       platform_id: state.selection.platform_id,
       version_id: state.selection.version_id
     };
-    if (state.candidate) {
-      body.candidate = state.candidate;
+    var candidates = candidateList();
+    if (candidates.length) {
+      body.candidates = candidates;
     }
     request("POST", API.run, body)
       .then(function (payload) {
+        state.lastRun = null;
         state.activeTask = {
           task_id: payload.task_id,
           project_id: state.selection.project_id,
           platform_id: state.selection.platform_id,
           version_id: state.selection.version_id,
-          candidate: state.candidate
+          candidates: candidates
         };
         saveUserState();
         setBusy(el.runStart, false, "Submitting", "Start production");
@@ -1288,15 +1435,38 @@
           error: payload.error,
           progress: payload.progress
         });
+        // A finished run being rebuilt that the server no longer remembers (it reports an
+        // unknown id as queued) is let go of.
+        if (!state.activeTask && !RUN_TERMINAL[payload.state]) {
+          closeRunPoll();
+          state.lastRun = null;
+          runResultUnseen = false;
+          resetConsole();
+          setRunState(null, null);
+          saveUserState();
+          return;
+        }
         if (status !== runPollLastStatus) {
           runPollLastStatus = status;
           setRunState(payload.state, payload);
         }
         if (RUN_TERMINAL[payload.state]) {
           closeRunPoll();
-          // A finished run is no longer tracked: the next "Produce data" starts fresh.
-          state.activeTask = null;
+          var tracked = state.activeTask;
+          if (tracked) {
+            // A finished run is no longer tracked, but stays the selection's last run.
+            runResultUnseen = state.view !== "run";
+            state.lastRun = {
+              task_id: tracked.task_id,
+              project_id: tracked.project_id,
+              platform_id: tracked.platform_id,
+              version_id: tracked.version_id,
+              seen: !runResultUnseen
+            };
+            state.activeTask = null;
+          }
           saveUserState();
+          renderRunIndicator();
           return;
         }
         schedulePoll();
@@ -1376,12 +1546,150 @@
     }
 
     renderRunProgress(taskState, status);
+    renderRunElapsed(taskState, status);
+    renderConsoleTail(taskState);
+    // The panel's frame keeps the outcome's colour once the run has ended.
+    if (RUN_TERMINAL[taskState]) {
+      el.runStatus.setAttribute("data-outcome", taskState === "SUCCESS" ? "ok" : "bad");
+    } else {
+      el.runStatus.removeAttribute("data-outcome");
+    }
 
+    // On success the summary of what was produced stands where the message would.
+    el.runSummary.hidden = !ready;
+    if (ready) {
+      renderRunSummary(status.result);
+    }
     if (status && status.error) {
       setMessage("run", "error", status.error);
     } else if (taskState === "SUCCESS") {
-      setMessage("run", "ok", "Model Setup Data produced.");
+      setMessage("run", null, "");
     }
+    renderRunIndicator();
+  }
+
+  function runIsLive() {
+    return !!state.activeTask && !!runState && !RUN_TERMINAL[runState];
+  }
+
+  // The pill in the session bar and the pulse on the Produce step, on every view
+  // but the console's: the run going, or how it ended until its console is opened.
+  function renderRunIndicator() {
+    var live = runIsLive();
+    var finished = !live && runResultUnseen && !!runState && RUN_TERMINAL[runState];
+    var shown = (live || finished) && state.view !== "run";
+    el.runIndicator.hidden = !shown;
+    el.runIndicatorDivider.hidden = !shown;
+    if (shown) {
+      var label = (RUN_STATES[runState] || {}).label || "Running";
+      var suffix = live
+        ? runPercent === null ? "" : " · " + runPercent + "%"
+        : runElapsedBase === null ? "" : " · " + formatElapsed(runElapsedBase);
+      el.runIndicatorText.textContent = label + suffix;
+      el.runIndicator.setAttribute("data-tone", live ? "busy" : runState === "SUCCESS" ? "ok" : "bad");
+      el.runIndicator.title = live ? "Open the production run" : "Open the finished run";
+      el.runIndicatorSpinner.hidden = !live;
+      el.runIndicatorIcon.hidden = live;
+      el.runIndicatorIcon.className = "lucide " + (runState === "SUCCESS" ? "lucide-circle-check" : "lucide-circle-x");
+    }
+    renderStepper(state.view);
+  }
+
+  // The log's tail: a blinking cursor while the run goes, gone once it has ended.
+  function renderConsoleTail(taskState) {
+    if (taskState === "STARTED" && !el.console.classList.contains("console--empty")) {
+      showConsoleCursor();
+    } else {
+      hideConsoleCursor();
+    }
+  }
+
+  function showConsoleCursor() {
+    if (!consoleCursor) {
+      consoleCursor = document.createElement("div");
+      consoleCursor.className = "console__cursor";
+      consoleCursor.setAttribute("aria-hidden", "true");
+    }
+    // Always the last thing in the log.
+    el.console.appendChild(consoleCursor);
+  }
+
+  function hideConsoleCursor() {
+    if (consoleCursor && consoleCursor.parentNode) {
+      consoleCursor.parentNode.removeChild(consoleCursor);
+    }
+  }
+
+  /* Elapsed time: measured by the server's clock at each poll (start to finish,
+   * or start to now), ticked locally in between while the run is going. */
+  function renderRunElapsed(taskState, status) {
+    stopElapsedTicker();
+    var startedAt = status && status.started_at;
+    if (!startedAt) {
+      el.runElapsed.hidden = true;
+      el.runElapsed.textContent = "";
+      return;
+    }
+    var until = status.finished_at || status.now || startedAt;
+    runElapsedBase = Math.max(0, until - startedAt);
+    runElapsedAt = performance.now();
+    el.runElapsed.hidden = false;
+    el.runElapsed.textContent = formatElapsed(runElapsedBase);
+    if (taskState === "STARTED") {
+      runElapsedTimer = window.setInterval(function () {
+        el.runElapsed.textContent = formatElapsed(runElapsedBase + (performance.now() - runElapsedAt) / 1000);
+      }, 1000);
+    }
+  }
+
+  function stopElapsedTicker() {
+    if (runElapsedTimer !== null) {
+      window.clearInterval(runElapsedTimer);
+      runElapsedTimer = null;
+    }
+  }
+
+  // "22 s", "1 m 05 s", "1 h 02 m".
+  function formatElapsed(seconds) {
+    var total = Math.max(0, Math.floor(seconds));
+    var hours = Math.floor(total / 3600);
+    var minutes = Math.floor((total % 3600) / 60);
+    var rest = total % 60;
+    var two = function (n) {
+      return (n < 10 ? "0" : "") + n;
+    };
+    if (hours) {
+      return hours + " h " + two(minutes) + " m";
+    }
+    if (minutes) {
+      return minutes + " m " + two(rest) + " s";
+    }
+    return rest + " s";
+  }
+
+  // The run's outcome in chips, named as the model card's panels: the model's
+  // scale, the acquisition log's length and the error count.
+  function renderRunSummary(result) {
+    el.runSummary.textContent = "";
+    var scale = (result && result.scale) || {};
+    var acquired = (result && result.acquired_files) || 0;
+    var errors = ((result && result.errors) || []).length;
+
+    SCALE_CELLS.forEach(function (cell) {
+      if (scale[cell.key] !== undefined) {
+        el.runSummary.appendChild(summaryChip(cell.label, scale[cell.key], ""));
+      }
+    });
+    el.runSummary.appendChild(summaryChip("Acquisition log", acquired, ""));
+    el.runSummary.appendChild(summaryChip("Errors", errors, errors > 0 ? "bad" : ""));
+  }
+
+  // tone: "" for the plain cyan chip, "bad" for the danger colour.
+  function summaryChip(key, value, tone) {
+    var chip = span("runsummary__item" + (tone ? " runsummary__item--" + tone : ""), "");
+    chip.appendChild(span("runsummary__key", key));
+    chip.appendChild(span("runsummary__value", String(value)));
+    return chip;
   }
 
   // The worker's percent; kept at its last value once the run ends, 100 on success.
@@ -1395,6 +1703,10 @@
     }
     var percent = status && status.progress && status.progress.percent;
     if (percent === undefined || percent === null) {
+      // Running without a report yet: the bar starts at zero rather than absent.
+      if (taskState === "STARTED" && el.runPercent.hidden) {
+        showRunProgress(0);
+      }
       return;
     }
     showRunProgress(percent);
@@ -1407,6 +1719,7 @@
     el.runProgress.style.transform = "scaleX(" + percent / 100 + ")";
     el.runPercent.hidden = false;
     el.runPercent.textContent = percent + "%";
+    runPercent = percent;
   }
 
   // The worker's "%(asctime)s %(levelname)-8s %(message)s" line; anything else is rendered whole.
@@ -1427,6 +1740,12 @@
     el.runProgress.style.transform = "scaleX(0)";
     el.runPercent.hidden = true;
     el.runPercent.textContent = "";
+    runPercent = null;
+    stopElapsedTicker();
+    el.runElapsed.hidden = true;
+    el.runElapsed.textContent = "";
+    el.runSummary.hidden = true;
+    consoleCursor = null;
     el.console.textContent = "";
     el.console.appendChild(
       emptyBlock("idle", "lucide-rocket", "Awaiting launch", "Start a production to watch it here.")
@@ -1454,6 +1773,9 @@
     el.console.appendChild(fragment);
     consoleRows += lines.length;
     enforceConsoleCap();
+    if (runState === "STARTED") {
+      showConsoleCursor();
+    }
 
     if (atBottom) {
       el.console.scrollTop = el.console.scrollHeight;
@@ -1558,11 +1880,11 @@
   function renderModelContext(model) {
     var context = model.context || {};
     var version = context.version || {};
-    el.modelProject.textContent = shown((context.project || {}).name);
-    el.modelPlatform.textContent = shown((context.platform || {}).name);
-    el.modelVersion.textContent = shown(version.label);
+    fillContext(el.modelProject, shown((context.project || {}).name));
+    fillContext(el.modelPlatform, shown((context.platform || {}).name));
+    fillContext(el.modelVersion, shown(version.label));
     el.modelCurrent.hidden = !version.is_effective;
-    el.modelGenerated.textContent = generatedAt(model.generated_at);
+    fillContext(el.modelGenerated, generatedAt(model.generated_at));
     el.modelContext.hidden = false;
   }
 
@@ -1924,8 +2246,6 @@
 
   function wireInventory() {
     el.unitFilter.addEventListener("input", drawUnits);
-    el.candidateUnit.addEventListener("change", onCandidateUnitChange);
-    el.candidateVersion.addEventListener("change", onCandidateVersionChange);
 
     // A tracked run is re-attached to; otherwise a new one is submitted.
     el.inventoryNext.addEventListener("click", function () {

@@ -4,7 +4,7 @@ a task of the TaskRunner, run by `run_production` in a child process
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 import mdg
 from mdg import CandidateUnitVersion, DataSourceConfig, SourceType
@@ -24,12 +24,12 @@ def run_production(
     selection: dict,
     sources: dict,
     produced_by: Optional[str],
-    candidate: Optional[dict],
+    candidates: Optional[list],
     progress: Callable[[int, str], None],
 ) -> dict:
     """One Model Setup Data production with the task's id as the run id;
     `sources` maps source type values to DataSourceConfig payloads and
-    `candidate` is the optional {"unit_name", "version"} under evaluation (req 6)."""
+    `candidates` are the optional {"unit_name", "version"} entries under evaluation (req 6)."""
     chosen = Selection.from_dict(selection)
     if chosen is None:
         raise ValueError(f"incomplete selection: {selection}")
@@ -42,7 +42,7 @@ def run_production(
         chosen.version_id,
         run_id=run_id,
         produced_by=produced_by,
-        candidate=CandidateUnitVersion.from_dict(candidate),
+        candidates=CandidateUnitVersion.list_from(candidates or []),
         progress=progress,
     ).to_dict()
 
@@ -58,10 +58,10 @@ class MultiprocessingProductionRunner(IProductionRunner):
         selection: Selection,
         sources: Dict[SourceType, DataSourceConfig],
         produced_by: Optional[str] = None,
-        candidate: Optional[dict] = None,
+        candidates: Optional[List[dict]] = None,
     ) -> str:
         payload = {source_type.value: source.to_dict() for source_type, source in sources.items()}
-        return self._tasks.submit(run_production, selection.to_dict(), payload, produced_by, candidate)
+        return self._tasks.submit(run_production, selection.to_dict(), payload, produced_by, list(candidates or []))
 
     def status(self, run_id: str) -> ProductionStatus:
         return self._status(self._tasks.status(run_id))
@@ -71,4 +71,7 @@ class MultiprocessingProductionRunner(IProductionRunner):
 
     @staticmethod
     def _status(status: TaskStatus) -> ProductionStatus:
-        return ProductionStatus(status.task_id, status.state, result=status.result, error=status.error, progress=status.progress)
+        return ProductionStatus(
+            status.task_id, status.state, result=status.result, error=status.error, progress=status.progress,
+            started_at=status.started_at, finished_at=status.finished_at,
+        )

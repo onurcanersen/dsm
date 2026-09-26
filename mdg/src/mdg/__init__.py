@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Sequence
 
 from mdg.adapters.config_management.mysql_config_management_repository import MysqlConfigManagementRepository
 from mdg.adapters.model_setup_data.filesystem_model_setup_data_store import FilesystemModelSetupDataStore
@@ -109,7 +109,7 @@ def produce_model_setup_data(
     version_id: str,
     run_id: str,
     produced_by: Optional[str] = None,
-    candidate: Optional[CandidateUnitVersion] = None,
+    candidates: Sequence[CandidateUnitVersion] = (),
     progress=None,
     workspace: Optional[Path] = None,
 ) -> ProductionResult:
@@ -133,7 +133,7 @@ def produce_model_setup_data(
         workspace=_workspace(workspace),
         system_repo_name=settings.workspace.system_repo,
         run_regenerate_code=settings.build.run_regenerate_code,
-    ).execute(project_id, platform_id, version_id, run_id, produced_by, candidate, progress)
+    ).execute(project_id, platform_id, version_id, run_id, produced_by, candidates, progress)
 
 
 def _mandatory_files() -> MandatoryFiles:

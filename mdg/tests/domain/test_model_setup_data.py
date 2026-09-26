@@ -36,12 +36,13 @@ def _record(payload):
     return ModelSetupDataRecord.from_payload(payload, seed.RUN_1, seed.PROJECT, seed.PLATFORM, seed.VERSION, Path("/ws/f.json"))
 
 
-def test_record_reads_the_header_and_the_candidate_from_the_inventory():
+def test_record_reads_the_header_and_the_candidates_from_the_inventory():
     payload = {
         "generated_at": "2026-09-02T14:15:30",
         "produced_by": seed.PRODUCER,
         "inventory": {"units": [
-            {"unit_name": seed.NAV_APP, "version": seed.VERSION, "is_candidate": False},
+            {"unit_name": seed.COMMON_LIB, "version": seed.VERSION, "is_candidate": False},
+            {"unit_name": seed.NAV_APP, "version": "2.0.0", "is_candidate": True},
             {"unit_name": seed.SENSOR_APP, "version": seed.CANDIDATE_VERSION, "is_candidate": True},
         ]},
         "graph": {"metadata": {"scale": {"apps": 2}}},
@@ -52,13 +53,16 @@ def test_record_reads_the_header_and_the_candidate_from_the_inventory():
     assert record.to_dict() == {
         "run_id": seed.RUN_1, "project_id": seed.PROJECT, "platform_id": seed.PLATFORM, "version_id": seed.VERSION,
         "generated_at": "2026-09-02T14:15:30", "produced_by": seed.PRODUCER, "scale": {"apps": 2},
-        "candidate": {"unit_name": seed.SENSOR_APP, "version": seed.CANDIDATE_VERSION},
+        "candidates": [
+            {"unit_name": seed.NAV_APP, "version": "2.0.0"},
+            {"unit_name": seed.SENSOR_APP, "version": seed.CANDIDATE_VERSION},
+        ],
     }
 
 
 def test_record_tolerates_an_unexpected_inventory_shape():
-    assert _record({"generated_at": "2026-09-02T14:15:30", "inventory": {"units": "x"}}).candidate is None
-    assert _record({"generated_at": "2026-09-02T14:15:30", "inventory": {"units": ["x"]}}).candidate is None
+    assert _record({"generated_at": "2026-09-02T14:15:30", "inventory": {"units": "x"}}).candidates == []
+    assert _record({"generated_at": "2026-09-02T14:15:30", "inventory": {"units": ["x"]}}).candidates == []
 
 
 def test_record_is_none_for_a_payload_that_is_not_a_model_setup_data_file():

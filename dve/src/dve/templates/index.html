@@ -37,6 +37,13 @@
     </div>
 
     <div class="sessionbar" id="sessionbar" hidden>
+      <!-- Shown on every stage while a production run is going; opens its console. -->
+      <button type="button" class="runpill" id="run-indicator" hidden title="Open the production run">
+        <span class="spinner" id="run-indicator-spinner"></span
+        ><i class="lucide lucide-circle-check" id="run-indicator-icon" hidden></i
+        ><span id="run-indicator-text">Production running</span>
+      </button>
+      <span class="sessionbar__divider" id="run-indicator-divider" hidden></span>
       <i class="lucide lucide-circle-user"></i>
       <span class="sessionbar__user" id="sessionbar-user"></span>
       <span class="sessionbar__divider"></span>
@@ -248,11 +255,11 @@
           <section class="view" id="view-files" hidden>
             <div class="files" id="run-files-panel" hidden>
               <span class="files__label"
-                ><i class="lucide lucide-hard-drive"></i>Previously produced</span
+                ><i class="lucide lucide-file-code"></i>Previously produced</span
               >
               <ul class="files__list" id="run-files"></ul>
               <div class="empty" id="run-files-empty" hidden>
-                <span class="empty__seal"><i class="lucide lucide-hard-drive"></i></span>
+                <span class="empty__seal"><i class="lucide lucide-file-code"></i></span>
                 <p class="empty__title">Nothing produced yet</p>
                 <p class="empty__note">
                   Start a production to create the first Model Setup Data file for this context.
@@ -270,26 +277,8 @@
             </div>
           </section>
 
-          <!-- Software Unit Version Inventory (SRS DSM-MDG req 10) and the candidate version (req 11). -->
+          <!-- Software Unit Version Inventory (SRS DSM-MDG req 10); each row's dropdown picks a candidate version (req 11). -->
           <section class="view" id="view-inventory" hidden>
-            <div class="context">
-              <div class="context__cell" title="Project">
-                <span class="context__key">Project</span>
-                <span class="context__value" id="context-project"></span>
-              </div>
-              <div class="context__cell" title="Platform">
-                <span class="context__key">Platform</span>
-                <span class="context__value" id="context-platform"></span>
-              </div>
-              <div class="context__cell" title="System version">
-                <span class="context__key">Version</span>
-                <span class="context__value" id="context-version"></span
-                ><span class="context__flag" id="context-current" hidden>
-                  &middot; Current</span
-                >
-              </div>
-            </div>
-
             <div class="units">
               <label class="units__search">
                 <i class="lucide lucide-search"></i>
@@ -307,35 +296,6 @@
               </label>
 
               <div class="units__list" id="unit-list"></div>
-
-              <div class="units__candidate">
-                <span class="units__candidate-key">Evaluate</span>
-                <div class="picker picker--inline">
-                  <div class="picker__control">
-                    <select
-                      id="candidate-unit"
-                      aria-label="Software unit to evaluate"
-                      disabled
-                    ></select>
-                    <i class="lucide lucide-chevron-down"></i>
-                  </div>
-                </div>
-                <span class="units__candidate-key">at</span>
-                <div
-                  class="picker picker--inline picker--disabled"
-                  id="picker-candidate-version"
-                >
-                  <div class="picker__control">
-                    <select
-                      id="candidate-version"
-                      aria-label="Candidate version"
-                      disabled
-                    ></select>
-                    <i class="lucide lucide-chevron-down"></i>
-                    <span class="spinner picker__spinner" aria-label="Reading published versions"></span>
-                  </div>
-                </div>
-              </div>
             </div>
 
             <p class="candidate__note" id="candidate-note" role="status"></p>
@@ -351,7 +311,27 @@
 
           <!-- Production run: the task's state and the worker's log (req 6, 8). -->
           <section class="view" id="view-run" hidden>
-            <div class="runpanel" id="run-status" data-tone="idle">
+            <div class="context" id="run-context">
+              <div class="context__cell" title="Project">
+                <span class="context__key">Project</span>
+                <span class="context__value" id="run-project"></span>
+              </div>
+              <div class="context__cell" title="Platform">
+                <span class="context__key">Platform</span>
+                <span class="context__value" id="run-platform"></span>
+              </div>
+              <div class="context__cell" title="System version">
+                <span class="context__key">Version</span>
+                <span class="context__value" id="run-version"></span
+                ><span class="context__flag" id="run-current" hidden>
+                  &middot; Current</span
+                >
+              </div>
+            </div>
+
+            <div class="runpanel mpanel" id="run-status" data-tone="idle">
+              <div class="mpanel__blur"></div>
+              <div class="mpanel__corners"></div>
               <div class="runpanel__bar">
                 <div
                   class="runpanel__bar-progress"
@@ -366,6 +346,7 @@
                   >Not started</span
                 >
                 <span class="runpanel__percent" id="run-percent" hidden></span>
+                <span class="runpanel__elapsed" id="run-elapsed" hidden></span>
                 <button
                   type="button"
                   class="submit submit--ghost submit--compact runpanel__stop"
@@ -389,25 +370,29 @@
                   <p class="empty__note">Start a production to watch it here.</p>
                 </div>
               </div>
-            </div>
 
-            <p class="message" id="run-message" role="alert"></p>
+              <!-- Floating over the console's bottom edge: the run's message and its one action. -->
+              <div class="runpanel__foot">
+                <div class="runsummary" id="run-summary" hidden></div>
+                <p class="message" id="run-message" role="alert"></p>
 
-            <div class="actions">
-              <button type="button" class="submit" id="run-start">
-                <span class="submit__label">Start production</span
-                ><i class="lucide lucide-arrow-right submit__arrow"></i>
-              </button>
+                <div class="actions">
+                  <button type="button" class="submit" id="run-start">
+                    <span class="submit__label">Start production</span
+                    ><i class="lucide lucide-arrow-right submit__arrow"></i>
+                  </button>
 
-              <button
-                type="button"
-                class="submit submit--ok"
-                id="run-model"
-                hidden
-              >
-                <span class="submit__label">View Model</span
-                ><i class="lucide lucide-arrow-right submit__arrow"></i>
-              </button>
+                  <button
+                    type="button"
+                    class="submit submit--ok"
+                    id="run-model"
+                    hidden
+                  >
+                    <span class="submit__label">View Model</span
+                    ><i class="lucide lucide-arrow-right submit__arrow"></i>
+                  </button>
+                </div>
+              </div>
             </div>
           </section>
 
@@ -436,13 +421,13 @@
             </div>
 
             <a
-              class="submit submit--compact model__download"
+              class="submit model__download"
               id="model-download"
               href="#"
               download
             >
-              <i class="lucide lucide-download"></i
-              ><span class="submit__label">Download</span>
+              <span class="submit__label">Download</span
+              ><i class="lucide lucide-download submit__arrow"></i>
             </a>
 
             <div class="empty empty--busy" id="model-loading" hidden>

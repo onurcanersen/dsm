@@ -232,7 +232,7 @@ def test_files_are_listed_newest_first_for_every_producer(tmp_path, produce, mak
     assert [f["run_id"] for f in files] == [seed.RUN_2, seed.RUN_1]
     assert files[0] == {
         "run_id": seed.RUN_2, "project_id": seed.PROJECT, "platform_id": seed.PLATFORM, "version_id": seed.VERSION,
-        "generated_at": "2026-09-02T14:15:30", "produced_by": seed.OPERATOR, "scale": {"apps": 2}, "candidate": None,
+        "generated_at": "2026-09-02T14:15:30", "produced_by": seed.OPERATOR, "scale": {"apps": 2}, "candidates": [],
     }
 
 
@@ -291,34 +291,46 @@ def test_run_starts_a_production_with_the_sessions_sources_and_user(make_runtime
     client = make_signed_in_client(make_runtime(production_runner=runner))
     login(client, seed.OPERATOR)
 
-    response = client.post("/api/mdg/run", json=dict(seed.SELECTION, candidate=seed.CANDIDATE))
+    response = client.post("/api/mdg/run", json=dict(seed.SELECTION, candidates=seed.CANDIDATES))
 
     assert response.status_code == 202
     task_id = response.get_json()["task_id"]
-    selection, sources, produced_by, candidate = runner.started[0]
+    selection, sources, produced_by, candidates = runner.started[0]
     assert selection == Selection(seed.PROJECT, seed.PLATFORM, seed.VERSION)
     assert sources[SourceType.CONFIG_MGMT_DB].user_info == f"{seed.USER}:{seed.PASSWORD}"
     assert sources[SourceType.SOURCE_CODE_REPO].connection_address == seed.SOURCE_REPO_URL
-    assert (produced_by, candidate) == (seed.OPERATOR, seed.CANDIDATE)
+    assert (produced_by, candidates) == (seed.OPERATOR, seed.CANDIDATES)
     assert task_id
 
 
-def test_run_without_a_candidate_submits_none(make_runtime, make_signed_in_client):
+def test_run_without_candidates_submits_an_empty_list(make_runtime, make_signed_in_client):
     runner = FakeProductionRunner()
     client = make_signed_in_client(make_runtime(production_runner=runner))
 
     assert client.post("/api/mdg/run", json=seed.SELECTION).status_code == 202
 
-    assert runner.started[0][3] is None
+    assert runner.started[0][3] == []
 
 
-@pytest.mark.parametrize("candidate, message", [
-    (seed.SENSOR_APP, "candidate must be a JSON object"),
-    ({"unit_name": seed.SENSOR_APP}, "version"),
-    ({"version": seed.CANDIDATE_VERSION}, "unit_name"),
+def test_run_submits_every_candidate(make_runtime, make_signed_in_client):
+    runner = FakeProductionRunner()
+    client = make_signed_in_client(make_runtime(production_runner=runner))
+    candidates = [seed.CANDIDATE, {"unit_name": seed.NAV_APP, "version": "2.0.0"}]
+
+    assert client.post("/api/mdg/run", json=dict(seed.SELECTION, candidates=candidates)).status_code == 202
+
+    assert runner.started[0][3] == candidates
+
+
+@pytest.mark.parametrize("candidates, message", [
+    (seed.CANDIDATE, "candidates must be a JSON array"),
+    ([seed.SENSOR_APP], "candidates[0] must be a JSON object"),
+    ([seed.CANDIDATE, {"unit_name": seed.NAV_APP}], "candidates[1] missing field(s): version"),
+    ([{"version": seed.CANDIDATE_VERSION}], "unit_name"),
+    ([seed.CANDIDATE, {"unit_name": seed.SENSOR_APP, "version": "1.0.1"}], f"candidates name a unit twice: {seed.SENSOR_APP}"),
 ])
-def test_run_refuses_a_malformed_candidate(signed_in_client, candidate, message):
-    response = signed_in_client.post("/api/mdg/run", json=dict(seed.SELECTION, candidate=candidate))
+def test_run_refuses_malformed_candidates(signed_in_client, candidates, message):
+    response = signed_in_client.post("/api/mdg/run", json=dict(seed.SELECTION, candidates=candidates))
 
     assert response.status_code == 400
     assert message in response.get_json()["error"]
@@ -351,6 +363,7 @@ def test_task_state_serves_the_status_and_the_lines_after_the_cursor(make_runtim
     assert body["state"] == "SUCCESS"
     assert body["result"] == {"selection": seed.SELECTION}
     assert body["lines"] == ["line one", "line two", "line three"]
+    assert isinstance(body["now"], float)
 
     assert client.get(f"/api/mdg/tasks/{task_id}?after=1").get_json()["lines"] == ["line three"]
     assert client.get(f"/api/mdg/tasks/{task_id}?after=not-a-number").get_json()["lines"] == ["line one", "line two", "line three"]

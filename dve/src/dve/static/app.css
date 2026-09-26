@@ -169,14 +169,21 @@ html::-webkit-scrollbar-corner,
   margin: auto;
 }
 
-/* Who is signed in, pinned to the page corner. */
+/* Brand (left) and session (right) share one header line: same inset, same
+   height as the tallest lockup image, contents centred vertically. */
+.brandbar,
 .sessionbar {
   position: fixed;
-  top: 18px;
-  right: 22px;
+  top: 24px;
   z-index: 5;
   display: flex;
   align-items: center;
+  height: 38px;
+}
+
+/* Who is signed in, pinned to the page corner. */
+.sessionbar {
+  right: 24px;
   gap: 11px;
   font-size: var(--fs-row);
   letter-spacing: var(--ls-tight);
@@ -206,14 +213,72 @@ html::-webkit-scrollbar-corner,
   background-color: var(--line);
 }
 
+/* The running production, on every stage but its own; a click opens its console. */
+.runpill {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 11px;
+  border: 1px solid var(--cyan-dim);
+  border-radius: var(--r-pill);
+  background-color: var(--tint-cyan);
+  color: var(--cyan);
+  font: inherit;
+  font-size: var(--fs-info);
+  letter-spacing: var(--ls-tight);
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color var(--t), box-shadow var(--t);
+}
+
+.runpill:hover,
+.runpill:focus-visible {
+  outline: none;
+  border-color: var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
+
+.runpill .spinner {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+  border-width: 1px;
+  vertical-align: 0;
+}
+
+.runpill > .lucide {
+  font-size: var(--icon-xs);
+}
+
+/* Once the run has ended the pill wears its outcome until the console is opened. */
+.runpill[data-tone="ok"] {
+  border-color: var(--ok-dim);
+  background-color: var(--tint-ok);
+  color: var(--ok);
+}
+
+.runpill[data-tone="ok"]:hover,
+.runpill[data-tone="ok"]:focus-visible {
+  border-color: var(--ok);
+  box-shadow: var(--glow-ok);
+}
+
+.runpill[data-tone="bad"] {
+  border-color: var(--danger-dim);
+  background-color: var(--tint-danger);
+  color: var(--danger);
+}
+
+.runpill[data-tone="bad"]:hover,
+.runpill[data-tone="bad"]:focus-visible {
+  border-color: var(--danger);
+  box-shadow: var(--glow-danger);
+}
+
 /* The product lockup, pinned to the top-left corner while signed in. */
 .brandbar {
-  position: fixed;
-  top: 18px;
-  left: 22px;
-  z-index: 5;
-  display: flex;
-  align-items: center;
+  left: 24px;
   gap: 10px;
 }
 
@@ -352,6 +417,23 @@ html::-webkit-scrollbar-corner,
   box-shadow: var(--glow-cyan);
 }
 
+/* The Produce step pulses while its run is going. */
+.stepper__item[data-live] .stepper__mark {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  animation: step-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes step-pulse {
+  0%,
+  100% {
+    box-shadow: var(--glow-cyan);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(34, 230, 245, 0.18), 0 0 18px rgba(34, 230, 245, 0.45);
+  }
+}
+
 /* A completed stage swaps its number for a check. */
 .stepper__mark .lucide {
   display: none;
@@ -388,6 +470,28 @@ html::-webkit-scrollbar-corner,
   .stepper__item {
     flex-basis: 56px;
   }
+}
+
+/* The run panel's frame keeps the run's outcome colour once it has ended. */
+.runpanel {
+  transition: border-color var(--t), box-shadow var(--t);
+}
+
+.runpanel[data-outcome="ok"] {
+  border-color: var(--ok);
+  box-shadow: var(--glow-ok), inset 0 0 60px rgba(53, 224, 127, 0.14);
+}
+
+.runpanel[data-outcome="bad"] {
+  border-color: var(--danger);
+  box-shadow: var(--glow-danger), inset 0 0 60px rgba(255, 107, 122, 0.14);
+}
+
+/* The cyan corner brackets stand down once the frame wears an outcome. */
+.runpanel[data-outcome]::before,
+.runpanel[data-outcome]::after,
+.runpanel[data-outcome] .mpanel__corners {
+  display: none;
 }
 
 /* The frame shared by a stage card and each panel of the model deck. */
@@ -834,7 +938,6 @@ html::-webkit-scrollbar-corner,
 
 /* The one micro-label for captions, panel bars and tile names. */
 .label,
-.units__candidate-key,
 .scale__label,
 .source__name,
 .source__state,
@@ -1064,6 +1167,7 @@ html::-webkit-scrollbar-corner,
 }
 
 /* The confirmed context as one slash-separated line, in the subtitle's box. */
+/* The model card's context as one line: project / platform / version · current / generated. */
 .context {
   display: flex;
   align-items: baseline;
@@ -1107,12 +1211,44 @@ html::-webkit-scrollbar-corner,
   color: var(--ok);
 }
 
+/* The run summary's chips: a muted key and a cyan value in a pill. */
+.runsummary__item {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 10px;
+  box-sizing: border-box;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  background-color: var(--tint-cyan);
+  font-size: var(--fs-value);
+  line-height: 1.3;
+  letter-spacing: var(--ls-text);
+  white-space: nowrap;
+  color: var(--cyan);
+}
+
+.runsummary__key {
+  flex: none;
+  font-size: var(--fs-label);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.runsummary__value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* ------------------------------------------------ list primitives */
 
 /* Every list on the page is the same object: a bordered box, a bar naming it, a stack of rows. */
 .units,
-.files,
-.runpanel {
+.files {
   border: 1px solid var(--line);
   border-radius: var(--r-panel);
   overflow: hidden;
@@ -1212,7 +1348,6 @@ html::-webkit-scrollbar-corner,
   white-space: nowrap;
 }
 
-.units__version,
 .mrow__value,
 .filerow__by {
   flex: none;
@@ -1327,25 +1462,31 @@ html::-webkit-scrollbar-corner,
 
 /* ------------------------------------------------ inventory card */
 
+/* The field is set like the list bar's label: the placeholder in the muted
+   colour, the typed text in cyan. */
 .units__search input {
   flex: 1;
   min-width: 0;
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--ink);
+  color: var(--cyan);
   caret-color: var(--cyan);
-  font: inherit;
-  font-size: var(--fs-row);
+  font-family: Orbitron, Barlow, sans-serif;
+  font-size: var(--fs-label);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
   outline: none;
 }
 
 .units__search input::placeholder {
   color: var(--muted);
-  letter-spacing: var(--ls-tight);
+  opacity: 1;
 }
 
-/* Only the rows scroll; the filter and the candidate row stay pinned. */
+/* Only the rows scroll; the filter stays pinned. */
 .units__list {
   display: flex;
   flex-direction: column;
@@ -1370,39 +1511,117 @@ html::-webkit-scrollbar-corner,
   color: var(--ok);
 }
 
-/* The candidate row as the inventory box's last row: "evaluate <unit> at <version>". */
-.units__candidate {
-  display: flex;
+/* Each inventory row ends in its version picker: the unit's own version, or a
+   candidate one from the source repository (SRS DSM-MDG req 11). */
+.units__row {
   align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
-  border-top: 1px solid var(--line);
-  background-color: rgba(4, 22, 31, 0.5);
 }
 
-.units__candidate-key {
+/* The row's version control (SRS DSM-MDG req 11): the version and an edit icon
+   until the unit's versions are read, then a native select in a pill. */
+.vedit {
+  display: flex;
   flex: none;
+  align-items: center;
+  gap: 6px;
+  max-width: 55%;
+  min-width: 0;
 }
 
-.units__candidate .picker {
-  flex: 1;
+.vedit__value {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-value);
+  letter-spacing: var(--ls-text);
+  color: var(--cyan);
+}
+
+.vedit__button {
+  display: flex;
+  flex: none;
+  align-items: center;
+  padding: 3px 5px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--icon-sm);
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--t);
+}
+
+.vedit__button:hover,
+.vedit__button:focus-visible {
+  outline: none;
+  color: var(--cyan);
+}
+
+/* While the read runs, the spinner stands where the pencil does. */
+.vedit__spinner {
+  display: none;
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+  border-width: 1px;
+  vertical-align: 0;
+}
+
+.vedit--loading .vedit__button .lucide {
+  display: none;
+}
+
+.vedit--loading .vedit__spinner {
+  display: inline-block;
+}
+
+.vedit--failed .vedit__button {
+  color: var(--danger);
+}
+
+.vedit .picker {
+  flex: none;
+  max-width: 100%;
   margin-bottom: 0;
 }
 
-/* A picker inside a list box: quieter border, tighter metrics. */
+.vedit .picker select {
+  width: auto;
+  max-width: 100%;
+}
+
+/* The in-row select as a pill, in the family of the candidate badge. */
 .picker--inline .picker__control {
   border-color: var(--line);
+  border-radius: var(--r-pill);
+  background-color: var(--tint-cyan);
+}
+
+.picker--inline:hover .picker__control {
+  border-color: var(--cyan-dim);
 }
 
 .picker--inline select {
-  padding: 6px 25px 6px 10px;
+  padding: 4px 26px 4px 12px;
+  border-radius: var(--r-pill);
   font-size: var(--fs-value);
+  letter-spacing: var(--ls-text);
+  color: var(--cyan);
+}
+
+.picker--inline select:disabled {
+  color: var(--muted);
 }
 
 .picker--inline .picker__control .lucide {
-  right: 9px;
+  right: 10px;
   font-size: var(--icon-xs);
+}
+
+.picker--inline.picker--disabled .picker__control {
+  background-color: transparent;
 }
 
 /* What the version list is doing, or why it is empty; gone when it has nothing to say. */
@@ -1480,22 +1699,107 @@ html::-webkit-scrollbar-corner,
 
 /* ------------------------------------------------ run card */
 
-/* State bar over the console, in one panel (req 6). */
-.runpanel {
+/* State bar over the console, in one panel that fills the card: the card's
+   frame is its only frame, so it clips itself to the card's rounding (req 6). */
+/* The panel's parts sit over its frosted backdrop; the bar rounds with the frame. */
+.runpanel__bar,
+.shell--run .console,
+.runpanel__foot {
   position: relative;
-  background-color: rgba(2, 14, 20, 0.72);
+  z-index: 1;
+}
+
+.runpanel__bar {
+  border-radius: calc(var(--r-card) - 2px) calc(var(--r-card) - 2px) 0 0;
+}
+
+.runpanel__bar,
+.shell--run .console {
+  padding-left: 20px;
+  padding-right: 20px;
 }
 
 .runpanel__bar {
   position: relative;
   flex-wrap: wrap;
   gap: 6px 10px;
+  min-height: 46px;
+  padding-top: 14px;
+  padding-bottom: 14px;
   overflow: hidden;
+}
+
+/* Floating over the console's bottom edge: the message at the left, the action
+   at the right; the console keeps room for them under its last lines. */
+.runpanel__foot {
+  position: absolute;
+  right: 20px;
+  bottom: 14px;
+  left: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.runpanel__foot .message,
+.runpanel__foot .runsummary,
+.runpanel__foot .actions {
+  pointer-events: auto;
+}
+
+/* The run's outcome as chips, in the message's slot. */
+.runsummary {
+  display: flex;
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+
+.runsummary__item {
+  background-color: rgba(2, 14, 20, 0.85);
+}
+
+.runsummary__item--bad {
+  border-color: var(--danger-dim);
+  color: var(--danger);
+}
+
+.runpanel__foot .message {
+  flex: 0 1 auto;
+  margin: 0;
+  background-color: rgba(2, 14, 20, 0.85);
+}
+
+.runpanel__foot .actions,
+.runpanel__foot .message:not(:empty) + .actions {
+  flex: none;
+  flex-direction: row;
+  margin-top: 0;
+  margin-left: auto;
+}
+
+.runpanel__foot .submit {
+  width: auto;
+  padding: 10px 18px;
+}
+
+/* The run's elapsed time, at the bar's far end. */
+.runpanel__elapsed {
+  margin-left: auto;
+  font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: var(--fs-info);
+  letter-spacing: var(--ls-text);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.runpanel__elapsed[hidden] ~ .runpanel__stop {
+  margin-left: auto;
 }
 
 /* Cancel, at bar scale and in the danger colour. */
 .runpanel__stop {
-  margin-left: auto;
   gap: 6px;
   padding: 3px 9px;
   border-color: var(--danger-dim);
@@ -1578,15 +1882,15 @@ html::-webkit-scrollbar-corner,
   font-variant-numeric: tabular-nums;
 }
 
-/* The panel's chrome takes the run's tone. */
-.runpanel,
+/* The bar's rule and glyphs take the run's tone. */
+.runpanel__bar,
 .runpanel__rocket,
 .runpanel__value {
   transition: border-color var(--t), color var(--t);
 }
 
-.runpanel[data-tone="busy"] {
-  border-color: var(--cyan-dim);
+.runpanel[data-tone="busy"] .runpanel__bar {
+  border-bottom-color: var(--cyan-dim);
 }
 
 .runpanel[data-tone="busy"] .runpanel__rocket {
@@ -1598,8 +1902,8 @@ html::-webkit-scrollbar-corner,
   color: var(--cyan);
 }
 
-.runpanel[data-tone="ok"] {
-  border-color: var(--ok-dim);
+.runpanel[data-tone="ok"] .runpanel__bar {
+  border-bottom-color: var(--ok-dim);
 }
 
 .runpanel[data-tone="ok"] .runpanel__rocket {
@@ -1620,8 +1924,8 @@ html::-webkit-scrollbar-corner,
   background: linear-gradient(90deg, transparent, var(--tint-ok-strong));
 }
 
-.runpanel[data-tone="bad"] {
-  border-color: var(--danger-dim);
+.runpanel[data-tone="bad"] .runpanel__bar {
+  border-bottom-color: var(--danger-dim);
 }
 
 .runpanel[data-tone="bad"] .runpanel__rocket {
@@ -1671,11 +1975,11 @@ html::-webkit-scrollbar-corner,
   height: auto;
   flex: 1 1 auto;
   min-height: 140px;
+  padding-bottom: 68px;
 }
 
 .shell--run .runpanel__bar,
-.shell--run #run-message,
-.shell--run .actions {
+.shell--run .runpanel__foot {
   flex: none;
 }
 
@@ -1741,6 +2045,22 @@ html::-webkit-scrollbar-corner,
   background-color: var(--tint-danger);
 }
 
+/* The cursor at the log's end while the run goes. */
+.console__cursor {
+  width: 0.6em;
+  height: 1.05em;
+  margin-top: 4px;
+  background-color: var(--cyan);
+  opacity: 0.85;
+  animation: cursor-blink 1s steps(2, start) infinite;
+}
+
+@keyframes cursor-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
 /* The count of lines the row cap trimmed from the top. */
 .console__trimmed {
   margin: 0 0 4px;
@@ -1753,12 +2073,17 @@ html::-webkit-scrollbar-corner,
 /* ------------------------------------------ core system model card */
 
 /* The deck of panels has no card frame of its own. */
+.card[data-view="run"],
 .card[data-view="model"] {
   padding: 0;
   border-color: transparent;
   box-shadow: none;
 }
 
+.card[data-view="run"]::before,
+.card[data-view="run"]::after,
+.card[data-view="run"] .card__blur,
+.card[data-view="run"] .card__corners,
 .card[data-view="model"]::before,
 .card[data-view="model"]::after,
 .card[data-view="model"] .card__blur,
@@ -1815,12 +2140,14 @@ html::-webkit-scrollbar-corner,
   position: relative;
 }
 
+/* Sized and shaped like the run card's View Model button. */
 .model__download {
   position: absolute;
   top: 12px;
   right: 0;
   z-index: 2;
-  border-radius: var(--r-pill);
+  width: auto;
+  padding: 10px 18px;
 }
 
 /* One panel per part of the file: a bar naming it, a body holding its rows. */

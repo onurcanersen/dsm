@@ -128,6 +128,10 @@
 .lucide-package::before {
   content: "\e129";
 }
+.lucide-pencil::before {
+  content: "\e1f9";
+}
+
 .lucide-rocket::before {
   content: "\e286";
 }

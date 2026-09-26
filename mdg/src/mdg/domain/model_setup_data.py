@@ -64,7 +64,7 @@ class ModelSetupDataRecord:
     generated_at: Optional[str] = None
     produced_by: Optional[str] = None
     scale: Dict[str, int] = field(default_factory=dict)
-    candidate: Optional[Dict[str, str]] = None
+    candidates: List[Dict[str, str]] = field(default_factory=list)
 
     @classmethod
     def from_payload(
@@ -75,11 +75,11 @@ class ModelSetupDataRecord:
         if not isinstance(payload, dict) or "generated_at" not in payload:
             return None
         units = (payload.get("inventory") or {}).get("units")
-        candidate = next(
-            ({"unit_name": u.get("unit_name"), "version": u.get("version")}
-             for u in (units if isinstance(units, list) else []) if isinstance(u, dict) and u.get("is_candidate")),
-            None,
-        )
+        candidates = [
+            {"unit_name": u.get("unit_name"), "version": u.get("version")}
+            for u in (units if isinstance(units, list) else [])
+            if isinstance(u, dict) and u.get("is_candidate")
+        ]
         return cls(
             run_id=run_id,
             project_id=project_id,
@@ -89,7 +89,7 @@ class ModelSetupDataRecord:
             generated_at=payload.get("generated_at"),
             produced_by=payload.get("produced_by"),
             scale=(payload.get("graph") or {}).get("metadata", {}).get("scale", {}),
-            candidate=candidate,
+            candidates=candidates,
         )
 
     def to_dict(self) -> Dict[str, Any]:
@@ -101,5 +101,5 @@ class ModelSetupDataRecord:
             "generated_at": self.generated_at,
             "produced_by": self.produced_by,
             "scale": self.scale,
-            "candidate": self.candidate,
+            "candidates": self.candidates,
         }

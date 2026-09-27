@@ -68,7 +68,7 @@ def test_a_failing_task_carries_the_childs_message(runner):
 def test_a_child_that_dies_without_reporting_is_a_failure(runner):
     task_id = runner.submit(scripted_task, "crash")
 
-    assert wait_until(finished(runner, task_id)) == TaskStatus(task_id, "FAILURE", error="worker exited with code 3")
+    assert wait_until(finished(runner, task_id)) == TaskStatus(task_id, "FAILURE", error="task process exited with code 3")
 
 
 def test_progress_is_reported_while_running_and_cancel_terminates_the_task(runner):

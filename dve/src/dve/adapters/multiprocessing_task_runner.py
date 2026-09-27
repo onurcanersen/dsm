@@ -219,7 +219,7 @@ class MultiprocessingTaskRunner(ITaskRunner):
             task.process.join()
         with self._lock:
             if task.status.state == STARTED:
-                task.status = task.status.ended(FAILURE, error=f"worker exited with code {task.process.exitcode}")
+                task.status = task.status.ended(FAILURE, error=f"task process exited with code {task.process.exitcode}")
             self._running -= 1
         self._dispatch()
 

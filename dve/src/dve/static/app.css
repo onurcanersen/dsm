@@ -1969,7 +1969,7 @@ html::-webkit-scrollbar-corner,
   color: var(--muted);
 }
 
-/* The worker's log; contained so appends lay out and paint the box alone. */
+/* The task's log; contained so appends lay out and paint the box alone. */
 .console {
   height: clamp(280px, 46vh, 460px);
   overflow-y: auto;

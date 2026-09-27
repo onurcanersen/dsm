@@ -420,12 +420,12 @@ def test_run_validates_the_selection(signed_in_client):
 def test_runner_failure_to_start_maps_to_502(make_runtime, make_signed_in_client):
     class BrokenRunner(FakeTaskRunner):
         def submit(self, target, *args):
-            raise RuntimeError("broker down")
+            raise RuntimeError("runner down")
 
     response = make_signed_in_client(make_runtime(task_runner=BrokenRunner())).post("/api/mdg/run", json=seed.SELECTION)
 
     assert response.status_code == 502
-    assert "broker down" in response.get_json()["error"]
+    assert "runner down" in response.get_json()["error"]
 
 
 def test_task_state_serves_the_status_and_the_lines_after_the_cursor(make_runtime, make_signed_in_client):
@@ -470,15 +470,15 @@ def test_cancel_revokes_a_queued_run_and_reports_a_finished_one(signed_in_client
 def test_cancel_and_state_failures_map_to_502(make_runtime, make_signed_in_client):
     class BrokenRunner(FakeTaskRunner):
         def cancel(self, task_id):
-            raise RuntimeError("broker down")
+            raise RuntimeError("runner down")
 
         def status(self, task_id):
-            raise RuntimeError("backend down")
+            raise RuntimeError("status unavailable")
 
     client = make_signed_in_client(make_runtime(task_runner=BrokenRunner()))
 
-    assert "broker down" in client.post("/api/mdg/tasks/x/cancel").get_json()["error"]
-    assert "backend down" in client.get("/api/mdg/tasks/x").get_json()["error"]
+    assert "runner down" in client.post("/api/mdg/tasks/x/cancel").get_json()["error"]
+    assert "status unavailable" in client.get("/api/mdg/tasks/x").get_json()["error"]
 
 
 @pytest.mark.parametrize("method, path", [("post", "/api/mdg/tasks/x/cancel"), ("get", "/api/mdg/tasks/x")])

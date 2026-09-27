@@ -33,7 +33,7 @@
   }
 
   /* Produced files are addressed by their selection and run id (req 5). */
-  function msdFilesUrl(selection, runId, suffix) {
+  function mdgFilesUrl(selection, runId, suffix) {
     var base = selectionUrl(selection) + "/mdg-files";
     return runId ? base + "/" + encodeURIComponent(runId) + "/" + suffix : base;
   }
@@ -1249,7 +1249,7 @@
       return Promise.resolve();
     }
     renderFiles(state.files);
-    return request("GET", msdFilesUrl(selection))
+    return request("GET", mdgFilesUrl(selection))
       .then(function (payload) {
         if (state.selection !== selection) {
           return;
@@ -1274,7 +1274,7 @@
     }
     setMessage("files", null, "");
     setBusy(el.filesUpload, true, "Uploading", "Upload");
-    request("POST", msdFilesUrl(selection), file)
+    request("POST", mdgFilesUrl(selection), file)
       .then(function (record) {
         setBusy(el.filesUpload, false, "Uploading", "Upload");
         if (state.selection !== selection) {
@@ -1721,7 +1721,7 @@
     return chip;
   }
 
-  // The worker's percent; kept at its last value once the run ends, 100 on success.
+  // The task's percent; kept at its last value once the run ends, 100 on success.
   function renderRunProgress(taskState, status) {
     if (taskState === "SUCCESS") {
       showRunProgress(100);
@@ -1751,7 +1751,7 @@
     runPercent = percent;
   }
 
-  // The worker's "%(asctime)s %(levelname)-8s %(message)s" line; anything else is rendered whole.
+  // The task log's "%(asctime)s %(levelname)-8s %(message)s" line; anything else is rendered whole.
   var LOG_LINE = /^(\d{2}:\d{2}:\d{2})\s+(DEBUG|INFO|WARNING|ERROR|CRITICAL)(\s+)([\s\S]*)$/;
 
   // How many rows the console keeps; older ones are counted in a marker at the top.
@@ -1869,7 +1869,7 @@
       return;
     }
     var runId = state.modelFile.run_id;
-    el.modelDownload.href = msdFilesUrl(state.selection, runId, "download");
+    el.modelDownload.href = mdgFilesUrl(state.selection, runId, "download");
     showView("model");
 
     if (state.model) {
@@ -1879,7 +1879,7 @@
     el.modelContext.hidden = true;
     el.modelGrid.hidden = true;
     el.modelLoading.hidden = false;
-    request("GET", msdFilesUrl(state.selection, runId, "model"))
+    request("GET", mdgFilesUrl(state.selection, runId, "model"))
       .then(function (model) {
         el.modelLoading.hidden = true;
         // Another file may own the card by now.

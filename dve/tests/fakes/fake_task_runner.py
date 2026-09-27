@@ -1,22 +1,25 @@
-"""Synchronous task runner: submit() runs a callable in-process in place of
-the target and records the outcome as the task's status (SRS DSM-DVE req 6)."""
+"""Test doubles around the task runner port: a synchronous runner that stands
+in for the port, and a scripted task for the real runner to spawn
+(SRS DSM-DVE req 6)."""
 
 from __future__ import annotations
 
+import logging
+import os
+import time
 import uuid
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Union
 
 from dve.domain.task_status import TaskStatus
 from dve.ports.task_runner import ITaskRunner
 
 
 class FakeTaskRunner(ITaskRunner):
-    """Records every submit as (target, args) and takes the outcome from
-    `run(*args)`, never calling the target; `states` are statuses reported in
+    """Records every submit as (target, args) and reports the task as
+    succeeded, never calling the target; `states` are statuses reported in
     order before the recorded outcome."""
 
-    def __init__(self, run: Optional[Callable[..., dict]] = None, states: List[Union[str, TaskStatus]] = ()):
-        self._run = run or (lambda selection, *rest: {"selection": selection})
+    def __init__(self, states: List[Union[str, TaskStatus]] = ()):
         self._states = list(states)
         self._reported = 0
         self._tasks: Dict[str, TaskStatus] = {}
@@ -25,12 +28,7 @@ class FakeTaskRunner(ITaskRunner):
     def submit(self, target: Callable[..., Any], *args: Any) -> str:
         task_id = uuid.uuid4().hex
         self.submitted.append((target, args))
-        try:
-            result = self._run(*args)
-        except Exception as exc:
-            self._tasks[task_id] = TaskStatus(task_id, "FAILURE", error=str(exc) or repr(exc))
-        else:
-            self._tasks[task_id] = TaskStatus(task_id, "SUCCESS", result=result)
+        self._tasks[task_id] = TaskStatus(task_id, "SUCCESS", result={"selection": args[0]})
         return task_id
 
     def status(self, task_id: str) -> TaskStatus:
@@ -51,3 +49,23 @@ class FakeTaskRunner(ITaskRunner):
             return known
         self._tasks[task_id] = TaskStatus(task_id, "REVOKED")
         return self._tasks[task_id]
+
+
+def scripted_task(task_id: str, mode: str, progress) -> dict:
+    """A task the task runner tests spawn: a module-level target the child can
+    import without pytest, scripted by its `mode` argument.
+
+    succeed: logs a line and returns; fail: raises; crash: exits without
+    reporting; sleep: reports progress and waits to be terminated."""
+    if mode == "succeed":
+        logging.getLogger("fakes.child").info("hello from child")
+        return {"task_id": task_id}
+    if mode == "fail":
+        raise ValueError("boom")
+    if mode == "crash":
+        os._exit(3)
+    if mode == "sleep":
+        progress(42, "clone")
+        while True:
+            time.sleep(0.1)
+    raise AssertionError(f"unknown mode {mode}")

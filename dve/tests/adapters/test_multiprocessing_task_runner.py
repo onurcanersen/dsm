@@ -10,7 +10,7 @@ from unittest import mock
 
 import pytest
 
-from fakes.fake_task import scripted_task
+from fakes.fake_task_runner import scripted_task
 from dve.adapters.in_memory_task_log import InMemoryTaskLog
 from dve.adapters import multiprocessing_task_runner as task_runner
 from dve.adapters.multiprocessing_task_runner import MultiprocessingTaskRunner

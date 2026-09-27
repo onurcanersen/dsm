@@ -2,17 +2,20 @@
 source connections (req 4, 7), the catalog reads (req 4), the
 produced files (req 5) and the production runs (req 6, 8, 50) (SRS DSM-DVE)."""
 
+import json
+
 import pytest
 
 from fakes import seed
 from fakes.fake_config_management_repository import FakeConfigManagementRepository
-from fakes.fake_production_runner import FakeProductionRunner
 from fakes.fake_source_code_repository import FakeSourceCodeRepository
+from fakes.fake_task_runner import FakeTaskRunner
 from fakes.seed import file_payload, files_url
 from mdg import ConfigManagementAccessError, SourceRepoAccessError, SourceRepoAuthError, SourceType
+from dve.adapters.in_memory_task_log import InMemoryTaskLog
 from dve.api import create_app
-from dve.domain.production_status import ProductionStatus
-from dve.domain.selection import Selection
+from dve.domain.task_status import TaskStatus
+from dve.services.task_service import run_production
 
 UNITS_URL = f"/api/projects/{seed.PROJECT}/platforms/{seed.PLATFORM}/versions/{seed.VERSION}/units"
 
@@ -261,7 +264,7 @@ def test_a_file_outlives_the_runs_record(tmp_path, produce, make_runtime, make_s
     runtime = make_runtime(workspace=tmp_path)
     client = make_signed_in_client(runtime)
 
-    assert runtime.production_runner.status(seed.RUN_1).state == "PENDING"
+    assert runtime.tasks.status(seed.RUN_1).state == "PENDING"
     assert client.get(files_url(seed.RUN_1, "/model")).status_code == 200
 
 
@@ -283,43 +286,116 @@ def test_file_routes_require_login_and_the_database(client, suffix):
     assert client.get(files_url(seed.RUN_1, suffix) if suffix else files_url()).status_code == 401
 
 
+def _upload(client, content: bytes, selection: dict = seed.SELECTION):
+    return client.post(files_url(selection=selection), data=content, content_type="application/json")
+
+
+def test_an_uploaded_file_is_stored_unchanged_listed_and_served(tmp_path, make_runtime, make_signed_in_client):
+    content = json.dumps(file_payload(context=seed.context()), indent=4).encode("utf-8")
+    client = make_signed_in_client(make_runtime(workspace=tmp_path))
+
+    response = _upload(client, content)
+
+    assert response.status_code == 201
+    record = response.get_json()
+    assert record == {
+        "run_id": record["run_id"], "project_id": seed.PROJECT, "platform_id": seed.PLATFORM,
+        "version_id": seed.VERSION, "generated_at": "2026-09-02T14:15:30", "produced_by": seed.OPERATOR,
+        "scale": {"apps": 2}, "candidates": [],
+    }
+    assert client.get(files_url()).get_json() == {"files": [record]}
+    assert client.get(files_url(record["run_id"], "/model")).data == content
+
+
+def test_each_upload_is_a_file_of_its_own(tmp_path, make_runtime, make_signed_in_client):
+    content = json.dumps(file_payload(context=seed.context())).encode("utf-8")
+    client = make_signed_in_client(make_runtime(workspace=tmp_path))
+
+    first, second = _upload(client, content).get_json(), _upload(client, content).get_json()
+
+    assert first["run_id"] != second["run_id"]
+    assert len(client.get(files_url()).get_json()["files"]) == 2
+
+
+@pytest.mark.parametrize("content, error", [
+    (b"", "file is empty"),
+    (b"{not json", "not a JSON file"),
+    (b"\xff\xfe", "not a JSON file"),
+    (b"[]", "not a Model Setup Data file: a JSON object is expected"),
+    (json.dumps(file_payload()).encode(), "not a Model Setup Data file: 'context.project.project_id' is missing"),
+    (
+        json.dumps(file_payload(context=seed.context(dict(seed.SELECTION, version_id=seed.OLD_VERSION)))).encode(),
+        f"file is for {seed.PROJECT}/{seed.PLATFORM}/{seed.OLD_VERSION}, "
+        f"not the selected {seed.PROJECT}/{seed.PLATFORM}/{seed.VERSION}",
+    ),
+])
+def test_an_upload_that_is_not_the_selections_file_is_refused(tmp_path, make_runtime, make_signed_in_client, content, error):
+    client = make_signed_in_client(make_runtime(workspace=tmp_path))
+
+    response = _upload(client, content)
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": error}
+    assert client.get(files_url()).get_json() == {"files": []}
+    assert not any(path.is_file() for path in tmp_path.rglob("*"))
+
+
+def test_an_oversized_upload_reports_413_as_json(tmp_path, make_runtime, make_signed_in_client):
+    client = make_signed_in_client(make_runtime(workspace=tmp_path))
+    client.application.config["MAX_CONTENT_LENGTH"] = 16
+
+    response = _upload(client, json.dumps(file_payload(context=seed.context())).encode("utf-8"))
+
+    assert response.status_code == 413
+    assert response.get_json() == {"error": "file is larger than 50 MB"}
+
+
+def test_upload_requires_login_and_the_database(client, login):
+    content = json.dumps(file_payload(context=seed.context())).encode("utf-8")
+
+    assert _upload(client, content).status_code == 401
+    login(client)
+    assert _upload(client, content).status_code == 401
+
+
 # -------------------------------------------------------------- production
 
 
 def test_run_starts_a_production_with_the_sessions_sources_and_user(make_runtime, make_signed_in_client, login):
-    runner = FakeProductionRunner()
-    client = make_signed_in_client(make_runtime(production_runner=runner))
+    runner = FakeTaskRunner()
+    client = make_signed_in_client(make_runtime(task_runner=runner))
     login(client, seed.OPERATOR)
 
     response = client.post("/api/mdg/run", json=dict(seed.SELECTION, candidates=seed.CANDIDATES))
 
     assert response.status_code == 202
     task_id = response.get_json()["task_id"]
-    selection, sources, produced_by, candidates = runner.started[0]
-    assert selection == Selection(seed.PROJECT, seed.PLATFORM, seed.VERSION)
-    assert sources[SourceType.CONFIG_MGMT_DB].user_info == f"{seed.USER}:{seed.PASSWORD}"
-    assert sources[SourceType.SOURCE_CODE_REPO].connection_address == seed.SOURCE_REPO_URL
+    target, (selection, sources, produced_by, candidates) = runner.submitted[0]
+    assert target is run_production
+    assert selection == seed.SELECTION
+    assert sources[SourceType.CONFIG_MGMT_DB.value]["user_info"] == f"{seed.USER}:{seed.PASSWORD}"
+    assert sources[SourceType.SOURCE_CODE_REPO.value]["connection_address"] == seed.SOURCE_REPO_URL
     assert (produced_by, candidates) == (seed.OPERATOR, seed.CANDIDATES)
     assert task_id
 
 
 def test_run_without_candidates_submits_an_empty_list(make_runtime, make_signed_in_client):
-    runner = FakeProductionRunner()
-    client = make_signed_in_client(make_runtime(production_runner=runner))
+    runner = FakeTaskRunner()
+    client = make_signed_in_client(make_runtime(task_runner=runner))
 
     assert client.post("/api/mdg/run", json=seed.SELECTION).status_code == 202
 
-    assert runner.started[0][3] == []
+    assert runner.submitted[0][1][3] == []
 
 
 def test_run_submits_every_candidate(make_runtime, make_signed_in_client):
-    runner = FakeProductionRunner()
-    client = make_signed_in_client(make_runtime(production_runner=runner))
+    runner = FakeTaskRunner()
+    client = make_signed_in_client(make_runtime(task_runner=runner))
     candidates = [seed.CANDIDATE, {"unit_name": seed.NAV_APP, "version": "2.0.0"}]
 
     assert client.post("/api/mdg/run", json=dict(seed.SELECTION, candidates=candidates)).status_code == 202
 
-    assert runner.started[0][3] == candidates
+    assert runner.submitted[0][1][3] == candidates
 
 
 @pytest.mark.parametrize("candidates, message", [
@@ -342,22 +418,22 @@ def test_run_validates_the_selection(signed_in_client):
 
 
 def test_runner_failure_to_start_maps_to_502(make_runtime, make_signed_in_client):
-    class BrokenRunner(FakeProductionRunner):
-        def start(self, *args, **kwargs):
+    class BrokenRunner(FakeTaskRunner):
+        def submit(self, target, *args):
             raise RuntimeError("broker down")
 
-    response = make_signed_in_client(make_runtime(production_runner=BrokenRunner())).post("/api/mdg/run", json=seed.SELECTION)
+    response = make_signed_in_client(make_runtime(task_runner=BrokenRunner())).post("/api/mdg/run", json=seed.SELECTION)
 
     assert response.status_code == 502
     assert "broker down" in response.get_json()["error"]
 
 
 def test_task_state_serves_the_status_and_the_lines_after_the_cursor(make_runtime, make_signed_in_client):
-    runtime = make_runtime()
-    client = make_signed_in_client(runtime)
+    log = InMemoryTaskLog()
+    client = make_signed_in_client(make_runtime(task_log=log))
     task_id = client.post("/api/mdg/run", json=seed.SELECTION).get_json()["task_id"]
     for line in ("line one", "line two", "line three"):
-        runtime.production_log.append(task_id, line)
+        log.append(task_id, line)
 
     body = client.get(f"/api/mdg/tasks/{task_id}").get_json()
     assert body["state"] == "SUCCESS"
@@ -370,12 +446,12 @@ def test_task_state_serves_the_status_and_the_lines_after_the_cursor(make_runtim
 
 
 def test_task_state_reports_progress_while_the_state_holds(make_runtime, make_signed_in_client):
-    runner = FakeProductionRunner(states=[
+    runner = FakeTaskRunner(states=[
         "PENDING",
-        ProductionStatus("t", "STARTED", progress={"percent": 10, "phase": "clone"}),
-        ProductionStatus("t", "STARTED", progress={"percent": 25, "phase": "clone"}),
+        TaskStatus("t", "STARTED", progress={"percent": 10, "phase": "clone"}),
+        TaskStatus("t", "STARTED", progress={"percent": 25, "phase": "clone"}),
     ])
-    client = make_signed_in_client(make_runtime(production_runner=runner))
+    client = make_signed_in_client(make_runtime(task_runner=runner))
     task_id = client.post("/api/mdg/run", json=seed.SELECTION).get_json()["task_id"]
 
     polls = [client.get(f"/api/mdg/tasks/{task_id}").get_json() for _ in range(4)]
@@ -392,14 +468,14 @@ def test_cancel_revokes_a_queued_run_and_reports_a_finished_one(signed_in_client
 
 
 def test_cancel_and_state_failures_map_to_502(make_runtime, make_signed_in_client):
-    class BrokenRunner(FakeProductionRunner):
-        def cancel(self, run_id):
+    class BrokenRunner(FakeTaskRunner):
+        def cancel(self, task_id):
             raise RuntimeError("broker down")
 
-        def status(self, run_id):
+        def status(self, task_id):
             raise RuntimeError("backend down")
 
-    client = make_signed_in_client(make_runtime(production_runner=BrokenRunner()))
+    client = make_signed_in_client(make_runtime(task_runner=BrokenRunner()))
 
     assert "broker down" in client.post("/api/mdg/tasks/x/cancel").get_json()["error"]
     assert "backend down" in client.get("/api/mdg/tasks/x").get_json()["error"]

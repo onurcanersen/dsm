@@ -69,7 +69,7 @@
       icon: "lucide-package",
       subtitle: "Select candidate versions, or produce with no change"
     },
-    files: { title: "Model Setup Data", icon: "lucide-file-code", subtitle: "Open a previously produced file or produce a new one" },
+    files: { title: "Model Setup Data", icon: "lucide-file-code", subtitle: "Open a previously produced file, upload one or produce a new one" },
     // The run card: the product's name over the context line and the console.
     run: { title: "Model Setup Data" },
     model: { title: "Core System Model" }
@@ -132,7 +132,8 @@
     var options = { method: method, credentials: "same-origin" };
     if (body !== undefined) {
       options.headers = { "Content-Type": "application/json" };
-      options.body = JSON.stringify(body);
+      // A file goes as it is; anything else as JSON.
+      options.body = body instanceof Blob ? body : JSON.stringify(body);
     }
     return fetch(url, options).then(function (response) {
       if (response.status === 204) {
@@ -1265,6 +1266,30 @@
       });
   }
 
+  // A file produced elsewhere joins this context's files and opens like a picked one.
+  function uploadFile(file) {
+    var selection = state.selection;
+    if (!selection || !file) {
+      return;
+    }
+    setMessage("files", null, "");
+    setBusy(el.filesUpload, true, "Uploading", "Upload");
+    request("POST", msdFilesUrl(selection), file)
+      .then(function (record) {
+        setBusy(el.filesUpload, false, "Uploading", "Upload");
+        if (state.selection !== selection) {
+          return;
+        }
+        openFile(record);
+      })
+      .catch(function (error) {
+        setBusy(el.filesUpload, false, "Uploading", "Upload");
+        if (!handleExpired(error)) {
+          setMessage("files", "error", error.message);
+        }
+      });
+  }
+
   // files: null until asked, so the card never claims there are none too early.
   function renderFiles(files) {
     el.runFiles.textContent = "";
@@ -1332,6 +1357,15 @@
   function wireRun() {
     el.runIndicator.addEventListener("click", enterProduce);
     el.filesPrimary.addEventListener("click", enterInventory);
+    el.filesUpload.addEventListener("click", function () {
+      el.filesUploadInput.click();
+    });
+    el.filesUploadInput.addEventListener("change", function () {
+      var file = el.filesUploadInput.files[0];
+      // Cleared so picking the same file again still fires.
+      el.filesUploadInput.value = "";
+      uploadFile(file);
+    });
     el.runStart.addEventListener("click", startRun);
     el.runModel.addEventListener("click", enterModel);
 
@@ -1667,21 +1701,16 @@
     return rest + " s";
   }
 
-  // The run's outcome in chips, named as the model card's panels: the model's
-  // scale, the acquisition log's length and the error count.
+  // The run's outcome in chips, named as the model card's scale cells.
   function renderRunSummary(result) {
     el.runSummary.textContent = "";
     var scale = (result && result.scale) || {};
-    var acquired = (result && result.acquired_files) || 0;
-    var errors = ((result && result.errors) || []).length;
 
     SCALE_CELLS.forEach(function (cell) {
       if (scale[cell.key] !== undefined) {
         el.runSummary.appendChild(summaryChip(cell.label, scale[cell.key], ""));
       }
     });
-    el.runSummary.appendChild(summaryChip("Acquisition log", acquired, ""));
-    el.runSummary.appendChild(summaryChip("Errors", errors, errors > 0 ? "bad" : ""));
   }
 
   // tone: "" for the plain cyan chip, "bad" for the danger colour.

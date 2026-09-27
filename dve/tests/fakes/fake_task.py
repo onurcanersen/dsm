@@ -1,4 +1,4 @@
-"""A task the TaskRunner tests spawn: a module-level target the child can
+"""A task the task runner tests spawn: a module-level target the child can
 import without pytest, scripted by its `mode` argument."""
 
 from __future__ import annotations

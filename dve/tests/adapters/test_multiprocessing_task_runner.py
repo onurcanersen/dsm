@@ -1,4 +1,4 @@
-"""The task runner with real spawned children, and its child-side entry
+"""The multiprocessing task runner with real spawned children, and its child-side entry
 in-process (SRS DSM-DVE req 6, 8, 50)."""
 
 import logging
@@ -12,8 +12,9 @@ import pytest
 
 from fakes.fake_task import scripted_task
 from dve.adapters.in_memory_task_log import InMemoryTaskLog
-from dve.services import task_runner
-from dve.services.task_runner import TaskRunner, TaskStatus
+from dve.adapters import multiprocessing_task_runner as task_runner
+from dve.adapters.multiprocessing_task_runner import MultiprocessingTaskRunner
+from dve.domain.task_status import TaskStatus
 
 
 def wait_until(predicate, timeout=30.0):
@@ -38,7 +39,7 @@ def log():
 
 @pytest.fixture
 def runner(log):
-    runner = TaskRunner(log, concurrency=1)
+    runner = MultiprocessingTaskRunner(log, concurrency=1)
     yield runner
     for task_id in list(runner._tasks):
         runner.cancel(task_id)
@@ -112,7 +113,7 @@ def test_cancel_of_a_pending_task_revokes_it_without_starting_it(runner, log):
 
 
 def test_unknown_ids_report_pending_and_cancel_as_revoked(log):
-    runner = TaskRunner(log)
+    runner = MultiprocessingTaskRunner(log)
 
     assert runner.status("nope") == TaskStatus("nope", "PENDING")
     assert runner.cancel("nope") == TaskStatus("nope", "REVOKED")
@@ -120,9 +121,9 @@ def test_unknown_ids_report_pending_and_cancel_as_revoked(log):
 
 
 def test_concurrency_defaults_to_the_cpu_count(log):
-    assert TaskRunner(log).concurrency == os.cpu_count()
-    assert TaskRunner(log, 0).concurrency == os.cpu_count()
-    assert TaskRunner(log, 3).concurrency == 3
+    assert MultiprocessingTaskRunner(log).concurrency == os.cpu_count()
+    assert MultiprocessingTaskRunner(log, 0).concurrency == os.cpu_count()
+    assert MultiprocessingTaskRunner(log, 3).concurrency == 3
 
 
 # --- child side, in-process --------------------------------------------------

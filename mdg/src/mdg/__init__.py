@@ -29,7 +29,7 @@ from mdg.domain.acquired_file import AcquiredFile
 from mdg.domain.data_source import DataSourceConfig, SourceType
 from mdg.domain.error_record import DataAcquisitionError, ErrorRecord, ErrorStatus
 from mdg.domain.inventory import CandidateUnitVersion
-from mdg.domain.model_setup_data import ModelSetupDataRecord
+from mdg.domain.model_setup_data import InvalidModelSetupData, ModelSetupDataRecord
 from mdg.domain.source_data import Message, Topic, UnitRelation
 from mdg.domain.workspace import Workspace
 from mdg.ports.config_management_repository import ConfigManagementAccessError, IConfigManagementRepository
@@ -56,6 +56,7 @@ __all__ = [
     "IConfigManagementRepository",
     "IModelSetupDataStore",
     "ISourceCodeRepository",
+    "InvalidModelSetupData",
     "Message",
     "ModelSetupDataRecord",
     "ProductionResult",

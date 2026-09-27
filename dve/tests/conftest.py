@@ -12,28 +12,28 @@ import pytest
 from fakes import seed
 from fakes.fake_config_management_repository import FakeConfigManagementRepository
 from dve.adapters.in_memory_task_log import InMemoryTaskLog
-from fakes.fake_production_runner import FakeProductionRunner
 from fakes.fake_source_code_repository import FakeSourceCodeRepository
+from fakes.fake_task_runner import FakeTaskRunner
 from dve import Runtime
 from dve.adapters.ldap_directory_service import LdapDirectoryService
 from dve.api import create_app
-from dve.services.data_source_connections import DataSourceConnections
+from dve.services.data_source_service import DataSourceService
+from dve.services.task_service import TaskService
 
 
 @pytest.fixture
 def make_runtime():
     """Factory of a Runtime over fakes; mdg's real file store serves `workspace`."""
-    def factory(workspace: Path = None, production_runner=None, source_repo=None, config_repo=None) -> Runtime:
+    def factory(workspace: Path = None, task_runner=None, task_log=None, source_repo=None, config_repo=None) -> Runtime:
         config_repo_factory = lambda source: config_repo or FakeConfigManagementRepository()
         source_repo_factory = lambda source: source_repo or FakeSourceCodeRepository()
         return Runtime(
             defaults=seed.DEFAULTS,
-            connections=DataSourceConnections(seed.DEFAULTS, config_repo_factory, source_repo_factory),
+            data_sources=DataSourceService(seed.DEFAULTS, config_repo_factory, source_repo_factory),
             config_repo_factory=config_repo_factory,
             source_repo_factory=source_repo_factory,
             directory_service=LdapDirectoryService(),
-            production_runner=production_runner or FakeProductionRunner(),
-            production_log=InMemoryTaskLog(),
+            tasks=TaskService(task_runner or FakeTaskRunner(), task_log or InMemoryTaskLog()),
             model_setup_data_store=mdg.model_setup_data_store(workspace or Path("/nonexistent-workspace")),
         )
     return factory

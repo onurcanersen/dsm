@@ -27,7 +27,7 @@ pip install -e ./mdg -e ./dve
 **3. API** (Ctrl+C stops it and its runs):
 
 ```bash
-dsm            # dsm -c 4 caps the concurrent productions
+dsm
 ```
 
 **4. UI:** <http://127.0.0.1:8080>, sign in as `admin` / `admin`, connect both data sources as `dsm` / `dsm`.

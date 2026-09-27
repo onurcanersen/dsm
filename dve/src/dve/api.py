@@ -14,14 +14,15 @@ Endpoints:
   GET    /api/projects/<project_id>/platforms/<platform_id>/versions                                     [login + config_mgmt_db]
   GET    /api/projects/<project_id>/platforms/<platform_id>/versions/<version_id>/units                  [login + config_mgmt_db]
   GET    /api/projects/.../versions/<version_id>/mdg-files                                               [login + config_mgmt_db]
-  GET    /api/projects/.../versions/<version_id>/mdg-files/<run_id>/model                                [login + config_mgmt_db]
+  POST   /api/projects/.../versions/<version_id>/mdg-files                     the file as the body      [login + config_mgmt_db]
+  GET    /api/projects/.../versions/<version_id>/mdg-files/<run_id>/model                               [login + config_mgmt_db]
   GET    /api/projects/.../versions/<version_id>/mdg-files/<run_id>/download                             [login + config_mgmt_db]
   GET    /api/units/<unit_name>/versions                                                                 [login + source_code_repo]
   POST   /api/mdg/run                                  selection fields + "candidates"?                  [login + both]
   GET    /api/mdg/tasks/<task_id>?after=<line>                                                           [login]
   POST   /api/mdg/tasks/<task_id>/cancel                                                                 [login]
 
-Run with: python -m dve.api, or dsm [-c N].
+Run with: python -m dve.api, or dsm.
 """
 
 from __future__ import annotations
@@ -29,11 +30,18 @@ from __future__ import annotations
 import functools
 import logging
 import time
+import uuid
 from datetime import timedelta
 
 from flask import Flask, jsonify, render_template, request, send_file, session
 
-from mdg import ConfigManagementAccessError, SourceRepoAccessError, SourceRepoAuthError, SourceType
+from mdg import (
+    ConfigManagementAccessError,
+    InvalidModelSetupData,
+    SourceRepoAccessError,
+    SourceRepoAuthError,
+    SourceType,
+)
 
 from dve import Runtime, runtime as load_runtime
 from dve.config import config
@@ -104,9 +112,14 @@ def create_app(runtime: Runtime | None = None) -> Flask:
     app = Flask(__name__)
     app.secret_key = config().api.secret_key
     app.permanent_session_lifetime = timedelta(seconds=config().api.session_lifetime)
+    app.config["MAX_CONTENT_LENGTH"] = config().api.max_upload_mb * 1024 * 1024
+
+    @app.errorhandler(413)
+    def too_large(_error_):
+        return _error(f"file is larger than {config().api.max_upload_mb} MB", 413)
 
     def sources():
-        return runtime.connections.connected(session.get("conn_token"))
+        return runtime.data_sources.connected(session.get("conn_token"))
 
     def connected(source_type: SourceType, message: str):
         """Answers 401 until the session has connected the data source (req 7)."""
@@ -161,7 +174,7 @@ def create_app(runtime: Runtime | None = None) -> Flask:
     @app.route("/api/logout", methods=["POST"])
     def api_logout():
         """Ends the session and drops its data source connections."""
-        runtime.connections.close(session.get("conn_token"))
+        runtime.data_sources.close(session.get("conn_token"))
         session.clear()
         return "", 204
 
@@ -190,10 +203,10 @@ def create_app(runtime: Runtime | None = None) -> Flask:
         body, error = _json_body(*_CONNECT_FIELDS)
         if error:
             return error
-        token = runtime.connections.open(session.get("conn_token"))
+        token = runtime.data_sources.open(session.get("conn_token"))
         session["conn_token"] = token
         try:
-            runtime.connections.connect(token, source_type, body["connection_address"], body["username"], body["password"])
+            runtime.data_sources.connect(token, source_type, body["connection_address"], body["username"], body["password"])
         except (ConfigManagementAccessError, SourceRepoAccessError, SourceRepoAuthError) as exc:
             return _error(str(exc), 502)
         return jsonify({"connected": True})
@@ -246,6 +259,27 @@ def create_app(runtime: Runtime | None = None) -> Flask:
         records = runtime.model_setup_data_store.list(project_id, platform_id, version_id)
         return jsonify({"files": [record.to_dict() for record in records]})
 
+    @app.route(
+        "/api/projects/<project_id>/platforms/<platform_id>/versions/<version_id>/mdg-files", methods=["POST"]
+    )
+    @login_required
+    @config_db_required
+    def api_mdg_file_upload(project_id, platform_id, version_id):
+        """Adds the Model Setup Data file in the body to the selection's files (req 5)."""
+        content = request.get_data()
+        if not content:
+            return _error("file is empty", 400)
+        try:
+            record = runtime.model_setup_data_store.add(
+                content, project_id, platform_id, version_id, uuid.uuid4().hex
+            )
+        except InvalidModelSetupData as exc:
+            return _error(str(exc), 400)
+        except OSError as exc:
+            logger.warning("mdg-files: upload failed: %s", exc)
+            return _error(str(exc), 502)
+        return jsonify(record.to_dict()), 201
+
     @app.route("/api/projects/<project_id>/platforms/<platform_id>/versions/<version_id>/mdg-files/<run_id>/model")
     @login_required
     @config_db_required
@@ -280,7 +314,7 @@ def create_app(runtime: Runtime | None = None) -> Flask:
             return error
         selection = Selection.from_dict(body)
         try:
-            task_id = runtime.production_runner.start(
+            task_id = runtime.tasks.start_production(
                 selection, sources(), produced_by=session["username"], candidates=candidates
             )
         except Exception as exc:
@@ -293,7 +327,7 @@ def create_app(runtime: Runtime | None = None) -> Flask:
     def api_mdg_task_cancel(task_id):
         """Cancels a queued or running production (req 6)."""
         try:
-            status = runtime.production_runner.cancel(task_id)
+            status = runtime.tasks.cancel(task_id)
         except Exception as exc:
             logger.warning("mdg/tasks/%s: cancellation failed: %s", task_id, exc)
             return _error(str(exc), 502)
@@ -308,8 +342,8 @@ def create_app(runtime: Runtime | None = None) -> Flask:
         except (TypeError, ValueError):
             after = -1
         try:
-            status = runtime.production_runner.status(task_id)
-            lines = runtime.production_log.lines_since(task_id, after + 1)
+            status = runtime.tasks.status(task_id)
+            lines = runtime.tasks.log_since(task_id, after + 1)
         except Exception as exc:
             logger.warning("mdg/tasks/%s: state read failed: %s", task_id, exc)
             return _error(str(exc), 502)

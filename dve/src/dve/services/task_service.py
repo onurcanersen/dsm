@@ -1,18 +1,18 @@
-"""Multiprocessing adapter of the production runner port: each production is
-a task of the TaskRunner, run by `run_production` in a child process
-(SRS DSM-DVE req 6, 50)."""
+"""The background tasks the API starts and tracks: each job is a module-level
+function the task runner runs in a child process, started by its own
+`start_<job>` (SRS DSM-DVE req 6, 8, 50)."""
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import mdg
 from mdg import CandidateUnitVersion, DataSourceConfig, SourceType
 
-from dve.domain.production_status import ProductionStatus
 from dve.domain.selection import Selection
-from dve.ports.production_runner import IProductionRunner
-from dve.services.task_runner import TaskRunner, TaskStatus
+from dve.domain.task_status import TaskStatus
+from dve.ports.task_log import ITaskLog
+from dve.ports.task_runner import ITaskRunner
 
 
 def _data_sources(sources: dict) -> Dict[SourceType, DataSourceConfig]:
@@ -47,31 +47,35 @@ def run_production(
     ).to_dict()
 
 
-class MultiprocessingProductionRunner(IProductionRunner):
-    """Submits `run_production` to the task runner and reports its task status."""
+class TaskService:
+    """Starts each kind of task on the task runner and reports, cancels and
+    reads the log of any of them by its task id."""
 
-    def __init__(self, tasks: TaskRunner):
-        self._tasks = tasks
+    def __init__(self, runner: ITaskRunner, log: ITaskLog):
+        self._runner = runner
+        self._log = log
 
-    def start(
+    def start_production(
         self,
         selection: Selection,
         sources: Dict[SourceType, DataSourceConfig],
         produced_by: Optional[str] = None,
         candidates: Optional[List[dict]] = None,
     ) -> str:
+        """Starts one production for the selection with the session's data sources
+        and returns its task id (req 6); `candidates` are the optional
+        {"unit_name", "version"} entries under evaluation (SRS DSM-MDG req 11)."""
         payload = {source_type.value: source.to_dict() for source_type, source in sources.items()}
-        return self._tasks.submit(run_production, selection.to_dict(), payload, produced_by, list(candidates or []))
+        return self._runner.submit(run_production, selection.to_dict(), payload, produced_by, list(candidates or []))
 
-    def status(self, run_id: str) -> ProductionStatus:
-        return self._status(self._tasks.status(run_id))
+    def status(self, task_id: str) -> TaskStatus:
+        """The current status of a task; an unknown id reports as PENDING (req 6)."""
+        return self._runner.status(task_id)
 
-    def cancel(self, run_id: str) -> ProductionStatus:
-        return self._status(self._tasks.cancel(run_id))
+    def cancel(self, task_id: str) -> TaskStatus:
+        """Revokes a queued or running task and returns its status (req 6)."""
+        return self._runner.cancel(task_id)
 
-    @staticmethod
-    def _status(status: TaskStatus) -> ProductionStatus:
-        return ProductionStatus(
-            status.task_id, status.state, result=status.result, error=status.error, progress=status.progress,
-            started_at=status.started_at, finished_at=status.finished_at,
-        )
+    def log_since(self, task_id: str, index: int) -> List[str]:
+        """The task's log lines from 0-based `index` to the end (req 8)."""
+        return self._log.lines_since(task_id, index)

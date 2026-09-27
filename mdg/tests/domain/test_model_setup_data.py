@@ -4,11 +4,18 @@
 from datetime import datetime
 from pathlib import Path
 
+import pytest
+
 from fakes import seed
 from mdg.domain.acquired_file import AcquiredFile
 from mdg.domain.error_record import ErrorRecord, ErrorStatus
 from mdg.domain.inventory import SoftwareUnitVersionInventory
-from mdg.domain.model_setup_data import ModelSetupData, ModelSetupDataRecord
+from mdg.domain.model_setup_data import (
+    InvalidModelSetupData,
+    ModelSetupData,
+    ModelSetupDataRecord,
+    check_payload,
+)
 
 
 def test_to_dict_carries_context_inventory_files_errors_and_graph():
@@ -68,3 +75,38 @@ def test_record_tolerates_an_unexpected_inventory_shape():
 def test_record_is_none_for_a_payload_that_is_not_a_model_setup_data_file():
     assert _record({"nodes": []}) is None
     assert _record(["not", "a", "dict"]) is None
+
+
+def _payload(**fields):
+    payload = {
+        "context": seed.CONTEXT.to_dict(), "inventory": {"units": []}, "acquired_files": [], "errors": [],
+        "generated_at": "2026-09-02T14:15:30", "produced_by": seed.PRODUCER, "graph": {},
+    }
+    payload.update(fields)
+    return payload
+
+
+def test_check_accepts_a_produced_files_payload_for_its_selection():
+    data = ModelSetupData(seed.CONTEXT, SoftwareUnitVersionInventory(seed.CONTEXT), [], [], {})
+
+    check_payload(data.to_dict(), seed.PROJECT, seed.PLATFORM, seed.VERSION)
+    check_payload({k: v for k, v in _payload().items() if k not in ("acquired_files", "errors")}, seed.PROJECT, seed.PLATFORM, seed.VERSION)
+
+
+@pytest.mark.parametrize("payload, reason", [
+    (["not", "a", "dict"], "a JSON object is expected"),
+    (_payload(generated_at=None), "'generated_at' is missing"),
+    (_payload(context=None), "'context' is missing"),
+    (_payload(context={"project": {"project_id": seed.PROJECT}, "platform": {}, "version": {}}), "'context.platform.platform_id' is missing"),
+    (_payload(inventory={"units": "x"}), "'inventory.units' is missing"),
+    (_payload(graph=[]), "'graph' is missing"),
+    (_payload(errors={}), "'errors' must be a list"),
+])
+def test_check_refuses_a_payload_without_the_files_shape(payload, reason):
+    with pytest.raises(InvalidModelSetupData, match=reason):
+        check_payload(payload, seed.PROJECT, seed.PLATFORM, seed.VERSION)
+
+
+def test_check_refuses_a_file_of_another_selection():
+    with pytest.raises(InvalidModelSetupData, match="file is for skywatch/nftw/1.0.0, not the selected skywatch/nftw/0.9.0"):
+        check_payload(_payload(), seed.PROJECT, seed.PLATFORM, seed.OLD_VERSION)

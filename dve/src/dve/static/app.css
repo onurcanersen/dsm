@@ -279,7 +279,7 @@ html::-webkit-scrollbar-corner,
 /* The product lockup, pinned to the top-left corner while signed in. */
 .brandbar {
   left: 24px;
-  gap: 10px;
+  gap: 5px;
 }
 
 .brandbar__img {
@@ -634,7 +634,7 @@ html::-webkit-scrollbar-corner,
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 6px;
   margin: var(--gap-mark) auto 0;
 }
 
@@ -821,6 +821,18 @@ html::-webkit-scrollbar-corner,
 
 .message:not(:empty) + .actions {
   margin-top: var(--gap-actions-tight);
+}
+
+/* A primary bar with a compact action beside it. */
+.actions--row {
+  flex-direction: row;
+  align-items: stretch;
+}
+
+.actions--row > .submit:not(.submit--compact) {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
 }
 
 /* Command bar; hover fills it solid cyan. */
@@ -2140,14 +2152,12 @@ html::-webkit-scrollbar-corner,
   position: relative;
 }
 
-/* Sized and shaped like the run card's View Model button. */
+/* Shaped like the files card's Upload button, in the primary colour. */
 .model__download {
   position: absolute;
   top: 12px;
   right: 0;
   z-index: 2;
-  width: auto;
-  padding: 10px 18px;
 }
 
 /* One panel per part of the file: a bar naming it, a body holding its rows. */

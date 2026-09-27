@@ -1,4 +1,4 @@
-"""In-memory adapter of the production log port: one line list per task,
+"""In-memory adapter of the task log port: one line list per task,
 kept for the process lifetime (SRS DSM-DVE req 6, 8)."""
 
 from __future__ import annotations
@@ -6,20 +6,20 @@ from __future__ import annotations
 import threading
 from typing import Dict, List
 
-from dve.ports.production_log import IProductionLog
+from dve.ports.task_log import ITaskLog
 
 
-class InMemoryTaskLog(IProductionLog):
+class InMemoryTaskLog(ITaskLog):
     """Appends and reads under a lock, since task threads write while request threads read."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._lines: Dict[str, List[str]] = {}
 
-    def append(self, run_id: str, line: str) -> None:
+    def append(self, task_id: str, line: str) -> None:
         with self._lock:
-            self._lines.setdefault(run_id, []).append(line)
+            self._lines.setdefault(task_id, []).append(line)
 
-    def lines_since(self, run_id: str, index: int) -> List[str]:
+    def lines_since(self, task_id: str, index: int) -> List[str]:
         with self._lock:
-            return list(self._lines.get(run_id, ())[max(index, 0):])
+            return list(self._lines.get(task_id, ())[max(index, 0):])

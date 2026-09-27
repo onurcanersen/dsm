@@ -31,8 +31,8 @@
         class="brandbar__img brandbar__img--right"
         src="{{ url_for('static', filename='img/logo-right.png') }}"
         alt=""
-        width="350"
-        height="135"
+        width="314"
+        height="150"
       />
     </div>
 
@@ -134,8 +134,8 @@
               class="logo__img logo__img--right"
               src="{{ url_for('static', filename='img/logo-right.png') }}"
               alt=""
-              width="350"
-              height="135"
+              width="314"
+              height="150"
             />
           </div>
           <i class="lucide lucide-database brand-icon" id="brand-icon" hidden></i>
@@ -255,25 +255,35 @@
           <section class="view" id="view-files" hidden>
             <div class="files" id="run-files-panel" hidden>
               <span class="files__label"
-                ><i class="lucide lucide-file-code"></i>Previously produced</span
+                ><i class="lucide lucide-rotate-ccw-clock"></i>Previously produced</span
               >
               <ul class="files__list" id="run-files"></ul>
               <div class="empty" id="run-files-empty" hidden>
-                <span class="empty__seal"><i class="lucide lucide-file-code"></i></span>
+                <span class="empty__seal"><i class="lucide lucide-rotate-ccw-clock"></i></span>
                 <p class="empty__title">Nothing produced yet</p>
                 <p class="empty__note">
-                  Start a production to create the first Model Setup Data file for this context.
+                  Start a production or upload a Model Setup Data file for this context.
                 </p>
               </div>
             </div>
 
             <p class="message" id="files-message" role="alert"></p>
 
-            <div class="actions">
+            <div class="actions actions--row">
+              <button type="button" class="submit submit--ghost submit--compact" id="files-upload">
+                <i class="lucide lucide-upload"></i
+                ><span class="submit__label">Upload</span>
+              </button>
               <button type="button" class="submit" id="files-primary">
                 <span class="submit__label">Produce new</span
                 ><i class="lucide lucide-arrow-right submit__arrow"></i>
               </button>
+              <input
+                type="file"
+                id="files-upload-input"
+                accept=".json,application/json"
+                hidden
+              />
             </div>
           </section>
 
@@ -421,13 +431,13 @@
             </div>
 
             <a
-              class="submit model__download"
+              class="submit submit--compact model__download"
               id="model-download"
               href="#"
               download
             >
-              <span class="submit__label">Download</span
-              ><i class="lucide lucide-download submit__arrow"></i>
+              <i class="lucide lucide-download"></i
+              ><span class="submit__label">Download</span>
             </a>
 
             <div class="empty empty--busy" id="model-loading" hidden>

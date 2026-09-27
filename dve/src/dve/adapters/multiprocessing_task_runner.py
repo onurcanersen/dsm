@@ -1,10 +1,10 @@
-"""Background tasks as child processes: one spawned process per task, a pipe
-per task for its log, progress and outcome, and a bounded number running at
-once (SRS DSM-DVE req 6, 8, 50).
+"""Multiprocessing adapter of the task runner port: one spawned process per
+task, a pipe per task for its log, progress and outcome, and a bounded number
+running at once (SRS DSM-DVE req 6, 8, 50).
 
 The child side (`run_task` and its helpers) runs in the spawned process; the
-parent side (`TaskRunner`) lives in the API process and keeps every task's
-status in memory for the process lifetime.
+parent side (`MultiprocessingTaskRunner`) lives in the API process and keeps
+every task's status in memory for the process lifetime.
 """
 
 from __future__ import annotations
@@ -17,14 +17,15 @@ import threading
 import time
 import uuid
 from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Deque, Dict, Optional, Protocol, Tuple
 
-from dve.ports.production_log import IProductionLog
+from dve.domain.task_status import FAILURE, PENDING, REVOKED, STARTED, SUCCESS, TaskStatus
+from dve.ports.task_log import ITaskLog
+from dve.ports.task_runner import ITaskRunner
 
 logger = logging.getLogger(__name__)
 
-PENDING, STARTED, SUCCESS, FAILURE, REVOKED = "PENDING", "STARTED", "SUCCESS", "FAILURE", "REVOKED"
 STOP_TIMEOUT_SECONDS = 5.0
 
 
@@ -123,24 +124,6 @@ def run_task(target: Callable[..., Any], task_id: str, args: tuple, events: Task
 # --- parent side ------------------------------------------------------------
 
 
-@dataclass(frozen=True)
-class TaskStatus:
-    """State (PENDING, STARTED, SUCCESS, FAILURE, REVOKED), the result or error
-    of a finished task, the progress a running one reported, and when it started
-    and finished (epoch seconds; not part of equality)."""
-    task_id: str
-    state: str
-    result: Optional[Any] = None
-    error: Optional[str] = None
-    progress: Optional[Dict[str, Any]] = None
-    started_at: Optional[float] = field(default=None, compare=False)
-    finished_at: Optional[float] = field(default=None, compare=False)
-
-    def ended(self, state: str, **fields: Any) -> "TaskStatus":
-        """This task's status at `state`, keeping its start and stamping its end."""
-        return TaskStatus(self.task_id, state, started_at=self.started_at, finished_at=time.time(), **fields)
-
-
 @dataclass
 class _Task:
     task_id: str
@@ -150,12 +133,12 @@ class _Task:
     process: Optional[multiprocessing.process.BaseProcess] = None
 
 
-class TaskRunner:
+class MultiprocessingTaskRunner(ITaskRunner):
     """Submits, reports and cancels tasks; at most `concurrency` run at once,
     the rest wait as PENDING. `target` must be a module-level function and
     `args` plain picklable data, since the child is spawned."""
 
-    def __init__(self, log: IProductionLog, concurrency: Optional[int] = None):
+    def __init__(self, log: ITaskLog, concurrency: Optional[int] = None):
         self._log = log
         self._concurrency = max(1, concurrency or os.cpu_count() or 1)
         self._ctx = multiprocessing.get_context("spawn")

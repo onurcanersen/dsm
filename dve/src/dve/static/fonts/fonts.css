@@ -7,14 +7,14 @@
  * arrived. The app sets Barlow at 400 only, so adding a heavier Barlow
  * rule to app.css means adding a face here too — without one the browser
  * fakes the bold. Fetched with:
- * curl -o barlow.woff2 https://fonts.gstatic.com/s/barlow/v13/7cHpv4kjgoGqM7E_DMs5.woff2
+ * curl -o barlow-400.woff2 https://fonts.gstatic.com/s/barlow/v13/7cHpv4kjgoGqM7E_DMs5.woff2
  */
 @font-face {
   font-family: "Barlow";
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  src: url("barlow.woff2") format("woff2");
+  src: url("barlow-400.woff2") format("woff2");
 }
 
 /*!
@@ -27,14 +27,14 @@
  * another static file, not the variable font Google serves when several
  * weights are requested at once: Firefox < 100 does not instance a variable
  * font from a single-value font-weight descriptor. Fetched with:
- * curl -o orbitron.woff2 https://fonts.gstatic.com/s/orbitron/v35/yMJMMIlzdpvBhQQL_SC3X9yhF25-T1nyxSmBoWgz.woff2
+ * curl -o orbitron-600.woff2 https://fonts.gstatic.com/s/orbitron/v35/yMJMMIlzdpvBhQQL_SC3X9yhF25-T1nyxSmBoWgz.woff2
  */
 @font-face {
   font-family: "Orbitron";
   font-style: normal;
   font-weight: 600;
   font-display: swap;
-  src: url("orbitron.woff2") format("woff2");
+  src: url("orbitron-600.woff2") format("woff2");
 }
 
 /*!
@@ -48,12 +48,12 @@
  * .icon-<name> rule in the package's font/lucide.css, and adding the rule
  * below. Built with fontTools from
  * https://cdn.jsdelivr.net/npm/lucide-static@1.43.0/font/lucide.woff2:
- * pyftsubset lucide.woff2 --unicodes=U+e048,... --flavor=woff2 --output-file=lucide.woff2
+ * pyftsubset lucide.woff2 --unicodes=U+e049,... --flavor=woff2 --output-file=lucide-subset.woff2
  */
 @font-face {
   font-family: lucide;
   font-display: block;
-  src: url("lucide.woff2") format("woff2");
+  src: url("lucide-subset.woff2") format("woff2");
 }
 
 .lucide::before,
@@ -71,9 +71,6 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-.lucide-arrow-left::before {
-  content: "\e048";
-}
 .lucide-arrow-right::before {
   content: "\e049";
 }
@@ -135,6 +132,9 @@
 .lucide-rocket::before {
   content: "\e286";
 }
+.lucide-rotate-ccw-clock::before {
+  content: "\e1f5";
+}
 .lucide-search::before {
   content: "\e151";
 }
@@ -143,6 +143,9 @@
 }
 .lucide-triangle-alert::before {
   content: "\e193";
+}
+.lucide-upload::before {
+  content: "\e19e";
 }
 .lucide-user::before {
   content: "\e19f";

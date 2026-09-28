@@ -1990,6 +1990,8 @@ html::-webkit-scrollbar-corner,
   padding-bottom: 68px;
 }
 
+/* The context line keeps its height; only the console gives up room. */
+.shell--run .context,
 .shell--run .runpanel__bar,
 .shell--run .runpanel__foot {
   flex: none;

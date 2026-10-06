@@ -72,13 +72,15 @@
     files: { title: "Model Setup Data", icon: "lucide-file-code", subtitle: "Open a previously produced file, upload one or produce a new one" },
     // The run card: the product's name over the context line and the console.
     run: { title: "Model Setup Data" },
-    model: { title: "Core System Model" }
+    model: { title: "Core System Model" },
+    // The graph stage: the same title over the context line, on the left.
+    graph: { title: "Core System Model" }
   };
 
   var PRODUCT_TITLE = "Digital System Model";
 
   // The stepper's stages, in order; boot and sign-in have none.
-  var STAGES = ["sources", "select", "files", "inventory", "run", "model"];
+  var STAGES = ["sources", "select", "files", "inventory", "run", "model", "graph"];
 
   var VIEWS = ["boot", "login"].concat(STAGES);
 
@@ -182,6 +184,8 @@
     el.card.setAttribute("data-view", name);
     el.shell.classList.toggle("shell--run", name === "run");
     el.shell.classList.toggle("shell--model", name === "model");
+    el.shell.classList.toggle("shell--graph", name === "graph");
+    document.body.classList.toggle("body--graph", name === "graph");
     renderSessionbar(STAGES.indexOf(name) !== -1);
     renderRunIndicator();
 
@@ -211,14 +215,13 @@
       var reachable =
         key === "sources" ||
         (key === "select" && allConnected()) ||
-        (key === "model" ? scoped && !!state.modelFile : scoped);
+        (key === "model" || key === "graph" ? scoped && !!state.modelFile : scoped);
       el.stages[key].button.disabled = !reachable;
     });
   }
 
   function renderHeader(header) {
     el.title.textContent = header.title || PRODUCT_TITLE;
-    el.title.hidden = !!header.bare;
     el.subtitle.textContent = header.subtitle || "";
     el.subtitle.hidden = !header.subtitle;
     el.logo.hidden = !header.logo;
@@ -655,6 +658,9 @@
         if (saved.view === "model" && state.modelFile) {
           return enterModel();
         }
+        if (saved.view === "graph" && state.modelFile) {
+          return enterGraph();
+        }
         return saved.view === "inventory" ? enterInventory() : enterFiles();
       });
     }
@@ -988,16 +994,12 @@
     return node;
   }
 
-  function setCandidateNote(text, isError) {
+  function setCandidateNote(text) {
     el.candidateNote.textContent = text;
-    el.candidateNote.classList.toggle("candidate__note--error", !!isError);
   }
 
-  // The note says how many units are at candidate versions, unless an error owns it.
+  // The note says how many units are at candidate versions.
   function summarizeCandidates() {
-    if (el.candidateNote.classList.contains("candidate__note--error")) {
-      return;
-    }
     var count = Object.keys(state.candidates).length;
     setCandidateNote(
       !count ? "" : count === 1 ? "1 unit at a candidate version." : count + " units at candidate versions."
@@ -1099,8 +1101,8 @@
     if (versionReads[unitName]) {
       return versionReads[unitName];
     }
-    setCandidateNote("");
-    summarizeCandidates();
+    // A failed read reports in the card's message strip, like any other error.
+    setMessage("inventory", null, "");
     versionReads[unitName] = request("GET", unitVersionsUrl(unitName))
       .then(function (payload) {
         candidateVersions[unitName] = payload.versions || [];
@@ -1108,7 +1110,7 @@
       .catch(function (error) {
         if (!handleExpired(error)) {
           candidateVersions[unitName] = null;
-          setCandidateNote(error.message, true);
+          setMessage("inventory", "error", error.message);
         }
       })
       .then(function () {
@@ -1862,6 +1864,21 @@
   // What the writer leaves where a source had nothing to give.
   var MISSING = "NOT_FOUND";
 
+  // The file read back once and kept (req 8); resolves with nothing when
+  // another file took the card meanwhile. Errors are the caller's to show.
+  function loadModel(runId) {
+    if (state.model) {
+      return Promise.resolve(state.model);
+    }
+    return request("GET", mdgFilesUrl(state.selection, runId, "model")).then(function (model) {
+      if (!state.modelFile || state.modelFile.run_id !== runId) {
+        return undefined;
+      }
+      state.model = model;
+      return model;
+    });
+  }
+
   function enterModel() {
     setMessage("model", null, "");
     if (!state.modelFile) {
@@ -1879,15 +1896,12 @@
     el.modelContext.hidden = true;
     el.modelGrid.hidden = true;
     el.modelLoading.hidden = false;
-    request("GET", mdgFilesUrl(state.selection, runId, "model"))
+    loadModel(runId)
       .then(function (model) {
         el.modelLoading.hidden = true;
-        // Another file may own the card by now.
-        if (!state.modelFile || state.modelFile.run_id !== runId) {
-          return;
+        if (model) {
+          renderModel(model);
         }
-        state.model = model;
-        renderModel(model);
       })
       .catch(function (error) {
         el.modelLoading.hidden = true;
@@ -1907,14 +1921,27 @@
   }
 
   function renderModelContext(model) {
+    fillModelContext(model, {
+      line: el.modelContext,
+      project: el.modelProject,
+      platform: el.modelPlatform,
+      version: el.modelVersion,
+      current: el.modelCurrent,
+      generated: el.modelGenerated
+    });
+  }
+
+  // The file's context line (req 4, 16) into one view's cells; the model
+  // card and the graph stage each have a set.
+  function fillModelContext(model, cells) {
     var context = model.context || {};
     var version = context.version || {};
-    fillContext(el.modelProject, shown((context.project || {}).name));
-    fillContext(el.modelPlatform, shown((context.platform || {}).name));
-    fillContext(el.modelVersion, shown(version.label));
-    el.modelCurrent.hidden = !version.is_effective;
-    fillContext(el.modelGenerated, generatedAt(model.generated_at));
-    el.modelContext.hidden = false;
+    fillContext(cells.project, shown((context.project || {}).name));
+    fillContext(cells.platform, shown((context.platform || {}).name));
+    fillContext(cells.version, shown(version.label));
+    cells.current.hidden = !version.is_effective;
+    fillContext(cells.generated, generatedAt(model.generated_at));
+    cells.line.hidden = false;
   }
 
   // The counts the file's metadata carries. The model card lays them out
@@ -2013,6 +2040,81 @@
         )
       );
     });
+  }
+
+  /* --------------------------------------------------------------- graph */
+
+  /* The model card's file drawn as the system hierarchy by static/graph.js
+   * (SRS DSM-DVE req 43). The model is fetched once (req 8), shared with the
+   * model card, and redrawn only when another file takes the card. */
+
+  // The model the tree on screen was drawn from.
+  var graphModel = null;
+
+  function enterGraph() {
+    setMessage("graph", null, "");
+    if (!state.modelFile) {
+      enterFiles();
+      return;
+    }
+    var runId = state.modelFile.run_id;
+    showView("graph");
+    if (state.model) {
+      renderGraph(state.model);
+      return;
+    }
+    el.graphContext.hidden = true;
+    el.graphLegend.hidden = true;
+    el.graphLoading.hidden = false;
+    loadModel(runId)
+      .then(function (model) {
+        if (model) {
+          renderGraph(model);
+        }
+      })
+      .catch(function (error) {
+        el.graphLoading.hidden = true;
+        if (!handleExpired(error)) {
+          setMessage("graph", "error", error.message);
+        }
+      });
+  }
+
+  function renderGraph(model) {
+    // The tree's model named under the title (req 4, 16), as the model card does.
+    fillModelContext(model, {
+      line: el.graphContext,
+      project: el.graphProject,
+      platform: el.graphPlatform,
+      version: el.graphVersion,
+      current: el.graphCurrent,
+      generated: el.graphGenerated
+    });
+    el.graphLegend.hidden = false;
+    if (graphModel === model) {
+      // Back on the card: the canvas may have been hidden while the window changed.
+      DsmHierarchyGraph.resize();
+      return;
+    }
+    el.graphLoading.hidden = false;
+    // The canvas has its size only once the card is shown; let that settle.
+    setTimeout(function () {
+      DsmHierarchyGraph.load(model)
+        .then(function () {
+          graphModel = model;
+          el.graphLoading.hidden = true;
+        })
+        .catch(function (error) {
+          el.graphLoading.hidden = true;
+          setMessage("graph", "error", error && error.message ? error.message : String(error));
+        });
+    }, 30);
+  }
+
+  function wireGraph() {
+    DsmHierarchyGraph.mount(el.graphCanvas, el.graphSearch);
+    // The model card's way on to the view step (req 43).
+    el.modelView.addEventListener("click", enterGraph);
   }
 
   function modelRow(host) {
@@ -2163,7 +2265,8 @@
       files: enterFiles,
       inventory: enterInventory,
       run: enterProduce,
-      model: enterModel
+      model: enterModel,
+      graph: enterGraph
     };
     STAGES.forEach(function (key) {
       el.stages[key].button.addEventListener("click", function () {
@@ -2305,6 +2408,7 @@
   wireReveal();
   wireSignOut();
   wireStepper();
+  wireGraph();
   wireLogin();
   wireSources();
   wireModal();

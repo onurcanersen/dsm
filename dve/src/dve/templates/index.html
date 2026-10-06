@@ -114,6 +114,15 @@
             <span class="stepper__name">Model</span>
           </button>
         </li>
+        <li class="stepper__item" id="stepper-graph" data-state="todo">
+          <button type="button" class="stepper__button" data-stage="graph">
+            <span class="stepper__mark">
+              <i class="lucide lucide-check"></i>
+              <span class="stepper__num">7</span>
+            </span>
+            <span class="stepper__name">View</span>
+          </button>
+        </li>
       </ol>
 
       <main class="card" id="card" data-view="boot">
@@ -430,15 +439,23 @@
               </div>
             </div>
 
-            <a
-              class="submit submit--compact model__download"
-              id="model-download"
-              href="#"
-              download
-            >
-              <i class="lucide lucide-download"></i
-              ><span class="submit__label">Download</span>
-            </a>
+            <!-- The file's actions in the header's right margin: on to the
+                 view step, or the file itself. -->
+            <div class="model__actions">
+              <a
+                class="submit submit--compact submit--ghost model__download"
+                id="model-download"
+                href="#"
+                download
+              >
+                <i class="lucide lucide-download"></i
+                ><span class="submit__label">Download</span>
+              </a>
+              <button type="button" class="submit submit--compact" id="model-view">
+                <span class="submit__label">View model</span
+                ><i class="lucide lucide-arrow-right submit__arrow"></i>
+              </button>
+            </div>
 
             <div class="empty empty--busy" id="model-loading" hidden>
               <span class="empty__seal"><span class="spinner"></span></span>
@@ -491,6 +508,97 @@
             </div>
 
             <p class="message" id="model-message" role="alert"></p>
+          </section>
+
+          <!-- System hierarchy: the model card's file as the CSMS > CSS > CSCI > CSC > CSU
+               tree, each CSU with its relation cards, filling the stage (SRS DSM-DVE req 43). -->
+          <section class="view" id="view-graph" hidden>
+            <!-- The model the tree is drawn from, as the model card's context
+                 line, under the title on the stage's left (req 4, 16). -->
+            <div class="context" id="graph-context" hidden>
+              <div class="context__cell" title="Project">
+                <span class="context__key">Project</span>
+                <span class="context__value" id="graph-project"></span>
+              </div>
+              <div class="context__cell" title="Platform">
+                <span class="context__key">Platform</span>
+                <span class="context__value" id="graph-platform"></span>
+              </div>
+              <div class="context__cell" title="System version">
+                <span class="context__key">Version</span>
+                <span class="context__value" id="graph-version"></span
+                ><span class="context__flag" id="graph-current" hidden>
+                  &middot; Current</span
+                >
+              </div>
+              <div class="context__cell" title="Generated">
+                <span class="context__key">Generated</span>
+                <span class="context__value" id="graph-generated"></span>
+              </div>
+            </div>
+
+            <!-- Search of the tree: boxes, rows and relation cards by name,
+                 narrowed by type; a pick opens, centres and lights it (req 43). -->
+            <div class="gsearch" id="graph-search" hidden>
+              <label class="gsearch__field">
+                <i class="lucide lucide-search"></i>
+                <input
+                  type="text"
+                  placeholder="SEARCH"
+                  aria-label="Search the system hierarchy"
+                  aria-controls="graph-search-results"
+                  autocomplete="off"
+                  autocapitalize="none"
+                  spellcheck="false"
+                />
+                <button type="button" class="gsearch__clear" aria-label="Clear" title="Clear" hidden>
+                  <i class="lucide lucide-x"></i>
+                </button>
+              </label>
+              <div class="gsearch__chips" aria-label="Filter by type">
+                <button type="button" class="gsearch__chip" data-type="hierarchy" aria-pressed="false">Hierarchy</button>
+                <button type="button" class="gsearch__chip" data-type="csu" aria-pressed="false">CSU</button>
+                <button type="button" class="gsearch__chip" data-type="node" aria-pressed="false">Node</button>
+                <button type="button" class="gsearch__chip" data-type="topic" aria-pressed="false">Topic</button>
+                <button type="button" class="gsearch__chip" data-type="message" aria-pressed="false">Message</button>
+                <button type="button" class="gsearch__chip" data-type="lib" aria-pressed="false">Library</button>
+                <button type="button" class="gsearch__chip" data-type="relation" aria-pressed="false">Relation</button>
+              </div>
+              <p class="gsearch__count" role="status" hidden></p>
+              <div class="gsearch__results" id="graph-search-results" role="listbox" hidden></div>
+            </div>
+
+            <!-- What the boxes' glyphs and marks mean, and how to move the
+                 picture (req 43): one line along the stage's bottom edge. -->
+            <section class="glegend" id="graph-legend" hidden>
+              <ul class="glegend__icons">
+                <li><i class="lucide lucide-ship"></i>CSMS</li>
+                <li><i class="lucide lucide-layers"></i>CSS</li>
+                <li><i class="lucide lucide-boxes"></i>CSCI</li>
+                <li><i class="lucide lucide-box"></i>CSC</li>
+                <li><i class="lucide lucide-cpu"></i>CSU</li>
+                <li><i class="lucide lucide-server"></i>Node</li>
+                <li><i class="lucide lucide-radio"></i>Topic</li>
+                <li><i class="lucide lucide-mail"></i>Message</li>
+                <li><i class="lucide lucide-library"></i>Library</li>
+              </ul>
+              <ul class="glegend__help">
+                <li>Drag to pan</li>
+                <li>Scroll to zoom</li>
+                <li><span class="glegend__mark">[+]</span> <span class="glegend__mark">[−]</span> expand, collapse</li>
+                <li>Hover for details</li>
+              </ul>
+            </section>
+
+            <div class="graph__stage" id="graph-stage">
+              <div class="graph__canvas" id="graph-canvas"></div>
+              <div class="empty empty--busy" id="graph-loading" hidden>
+                <span class="empty__seal"><span class="spinner"></span></span>
+                <p class="empty__title">Loading core system model</p>
+              </div>
+            </div>
+
+            <p class="message" id="graph-message" role="alert"></p>
           </section>
         </div>
       </main>
@@ -581,6 +689,8 @@
       </div>
     </div>
 
+    <script src="{{ url_for('static', filename='vendor/g6.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='graph.js') }}"></script>
     <script src="{{ url_for('static', filename='app.js') }}"></script>
   </body>
 </html>

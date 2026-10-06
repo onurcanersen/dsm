@@ -19,6 +19,7 @@ setup(
             "static/*",
             "static/fonts/*",
             "static/img/*",
+            "static/vendor/*",
         ]
     },
     include_package_data=True,

@@ -10,6 +10,10 @@
   --ok-dim: rgba(53, 224, 127, 0.45);
   --warn: #ffc46b;
   --warn-dim: rgba(255, 196, 107, 0.45);
+  /* The search's find (req 43): a warm gold no other element wears, so the
+     picked box and row stand out from the cyan. */
+  --mark: #ffd166;
+  --mark-dim: rgba(255, 209, 102, 0.5);
 
   /* Fills: the resting tint of a control, and the stronger one a hover takes. */
   --tint-cyan: rgba(34, 230, 245, 0.08);
@@ -19,6 +23,14 @@
   --tint-danger: rgba(255, 107, 122, 0.08);
   --tint-danger-strong: rgba(255, 107, 122, 0.14);
   --tint-ink: rgba(223, 238, 242, 0.06);
+  --tint-mark: rgba(255, 209, 102, 0.12);
+  --tint-mark-strong: rgba(255, 209, 102, 0.2);
+
+  /* The graph stage's glass panels, search and hover cards (req 43): rim and lift. */
+  --glass-line: rgba(34, 230, 245, 0.42);
+  --glass-shadow: 0 10px 30px rgba(0, 8, 14, 0.55), 0 0 18px rgba(34, 230, 245, 0.14), inset 0 1px 0 rgba(34, 230, 245, 0.18);
+  /* The ink of text floating over the tree: a tight dark edge under a wider halo. */
+  --ink-shadow: 0 0 2px #02101a, 0 0 2px #02101a, 0 1px 3px #02101a, 0 0 10px rgba(2, 16, 26, 0.9);
 
   /* The glow a lit box carries: a 1px ring and a soft halo. */
   --glow-cyan: 0 0 0 1px rgba(34, 230, 245, 0.35), 0 0 16px rgba(34, 230, 245, 0.28);
@@ -108,7 +120,9 @@ html,
 .files__list,
 .console,
 .mpanel__body,
-.modal__panel {
+.modal__panel,
+.list--scroll,
+.gsearch__results {
   scrollbar-width: auto;
   scrollbar-color: var(--sb-thumb) var(--sb-track);
 }
@@ -118,7 +132,9 @@ html::-webkit-scrollbar,
 .files__list::-webkit-scrollbar,
 .console::-webkit-scrollbar,
 .mpanel__body::-webkit-scrollbar,
-.modal__panel::-webkit-scrollbar {
+.modal__panel::-webkit-scrollbar,
+.list--scroll::-webkit-scrollbar,
+.gsearch__results::-webkit-scrollbar {
   width: 12px;
   height: 12px;
 }
@@ -128,7 +144,9 @@ html::-webkit-scrollbar-track,
 .files__list::-webkit-scrollbar-track,
 .console::-webkit-scrollbar-track,
 .mpanel__body::-webkit-scrollbar-track,
-.modal__panel::-webkit-scrollbar-track {
+.modal__panel::-webkit-scrollbar-track,
+.list--scroll::-webkit-scrollbar-track,
+.gsearch__results::-webkit-scrollbar-track {
   background-color: var(--sb-track);
 }
 
@@ -137,7 +155,9 @@ html::-webkit-scrollbar-thumb,
 .files__list::-webkit-scrollbar-thumb,
 .console::-webkit-scrollbar-thumb,
 .mpanel__body::-webkit-scrollbar-thumb,
-.modal__panel::-webkit-scrollbar-thumb {
+.modal__panel::-webkit-scrollbar-thumb,
+.list--scroll::-webkit-scrollbar-thumb,
+.gsearch__results::-webkit-scrollbar-thumb {
   border-radius: 6px;
   background-color: var(--sb-thumb);
 }
@@ -147,7 +167,9 @@ html::-webkit-scrollbar-thumb:hover,
 .files__list::-webkit-scrollbar-thumb:hover,
 .console::-webkit-scrollbar-thumb:hover,
 .mpanel__body::-webkit-scrollbar-thumb:hover,
-.modal__panel::-webkit-scrollbar-thumb:hover {
+.modal__panel::-webkit-scrollbar-thumb:hover,
+.list--scroll::-webkit-scrollbar-thumb:hover,
+.gsearch__results::-webkit-scrollbar-thumb:hover {
   background-color: var(--cyan);
 }
 
@@ -156,7 +178,9 @@ html::-webkit-scrollbar-corner,
 .files__list::-webkit-scrollbar-corner,
 .console::-webkit-scrollbar-corner,
 .mpanel__body::-webkit-scrollbar-corner,
-.modal__panel::-webkit-scrollbar-corner {
+.modal__panel::-webkit-scrollbar-corner,
+.list--scroll::-webkit-scrollbar-corner,
+.gsearch__results::-webkit-scrollbar-corner {
   background-color: transparent;
 }
 
@@ -903,6 +927,12 @@ html::-webkit-scrollbar-corner,
   letter-spacing: var(--ls-tight);
 }
 
+/* The compact bar's arrow sits on the gap, at the label's size. */
+.submit--compact .submit__arrow {
+  margin-left: 0;
+  font-size: var(--icon-sm);
+}
+
 .submit--ghost:hover:not(:disabled) {
   background-color: transparent;
   border-color: var(--cyan-dim);
@@ -1178,8 +1208,8 @@ html::-webkit-scrollbar-corner,
   padding: 0 20px;
 }
 
-/* The confirmed context as one slash-separated line, in the subtitle's box. */
-/* The model card's context as one line: project / platform / version · current / generated. */
+/* The model card's and the graph stage's context as one slash-separated
+   line in the subtitle's box: project / platform / version · current / generated. */
 .context {
   display: flex;
   align-items: baseline;
@@ -1604,10 +1634,10 @@ html::-webkit-scrollbar-corner,
   max-width: 100%;
 }
 
-/* The in-row select as a pill, in the family of the candidate badge. */
+/* The in-row select as a rounded rectangle, like the page's controls. */
 .picker--inline .picker__control {
   border-color: var(--line);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-control);
   background-color: var(--tint-cyan);
 }
 
@@ -1617,7 +1647,7 @@ html::-webkit-scrollbar-corner,
 
 .picker--inline select {
   padding: 4px 26px 4px 12px;
-  border-radius: var(--r-pill);
+  border-radius: var(--r-control);
   font-size: var(--fs-value);
   letter-spacing: var(--ls-text);
   color: var(--cyan);
@@ -1643,10 +1673,6 @@ html::-webkit-scrollbar-corner,
 
 .candidate__note:empty {
   display: none;
-}
-
-.candidate__note--error {
-  color: var(--danger);
 }
 
 /* ------------------------------------------------ files card */
@@ -2086,9 +2112,10 @@ html::-webkit-scrollbar-corner,
 
 /* ------------------------------------------ core system model card */
 
-/* The deck of panels has no card frame of its own. */
+/* The deck of panels and the graph stage have no card frame of their own. */
 .card[data-view="run"],
-.card[data-view="model"] {
+.card[data-view="model"],
+.card[data-view="graph"] {
   padding: 0;
   border-color: transparent;
   box-shadow: none;
@@ -2101,7 +2128,11 @@ html::-webkit-scrollbar-corner,
 .card[data-view="model"]::before,
 .card[data-view="model"]::after,
 .card[data-view="model"] .card__blur,
-.card[data-view="model"] .card__corners {
+.card[data-view="model"] .card__corners,
+.card[data-view="graph"]::before,
+.card[data-view="graph"]::after,
+.card[data-view="graph"] .card__blur,
+.card[data-view="graph"] .card__corners {
   display: none;
 }
 
@@ -2149,17 +2180,20 @@ html::-webkit-scrollbar-corner,
   flex: none;
 }
 
-/* The download hangs in the header's right margin. */
+/* The actions hang in the header's right margin: the download as a
+   ghost, the way on to the view step in the primary colour. */
 #view-model {
   position: relative;
 }
 
-/* Shaped like the files card's Upload button, in the primary colour. */
-.model__download {
+.model__actions {
   position: absolute;
   top: 12px;
   right: 0;
   z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* One panel per part of the file: a bar naming it, a body holding its rows. */
@@ -2311,11 +2345,758 @@ html::-webkit-scrollbar-corner,
     max-height: 320px;
   }
 
-  .model__download {
+  .model__actions {
     position: static;
-    margin: 0 auto 22px;
+    justify-content: center;
+    margin: 0 0 22px;
   }
 }
+
+
+/* ------------------------------------------------ graph (system hierarchy) */
+
+/* The seventh stage: the model card's file as the CSMS > CSS > CSCI > CSC
+   > CSU tree drawn by static/graph.js (SRS DSM-DVE req 43). The picture
+   alone, edge to edge under the stepper. */
+.shell--graph {
+  width: 100%;
+  align-self: stretch;
+  margin: 0;
+  gap: 0;
+}
+
+/* The whole page goes to the canvas; the stepper floats over it on the
+   header line, taking the pointer only on its buttons. */
+body.body--graph {
+  padding: 0;
+  background-image: url("img/bg-blur.jpeg");
+}
+
+.shell--graph .stepper {
+  position: fixed;
+  top: 24px;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.shell--graph .stepper__button {
+  pointer-events: auto;
+}
+
+/* The frame goes with the model deck's; the border too, so the stage
+   runs edge to edge (req 43). */
+.card[data-view="graph"] {
+  width: 100%;
+  border: 0;
+}
+
+.shell--graph .card,
+.shell--graph .card__body,
+.shell--graph #view-graph {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.shell--graph #graph-message {
+  flex: none;
+}
+
+#view-graph {
+  position: relative;
+}
+
+/* The title and the context line (req 4, 16) float on the stage's left
+   under the stepper, clear of the search panel. Inked in, since the tree
+   can run under them. */
+.shell--graph .title,
+.shell--graph .context {
+  position: fixed;
+  left: 24px;
+  z-index: 5;
+  max-width: calc(100vw - 372px);
+  margin: 0;
+  text-align: left;
+  text-shadow: var(--ink-shadow);
+}
+
+.shell--graph .title {
+  top: 88px;
+}
+
+.shell--graph .context {
+  /* The title's line (20px at 1.3) plus the lead gap. */
+  top: calc(88px + 26px + var(--gap-lead));
+  justify-content: flex-start;
+  overflow: visible;
+}
+
+/* The context cells clip to their own box for the ellipsis, which would
+   also cut the halo; padding the halo's reach, taken back by the margin,
+   keeps it inside without moving the text. */
+.shell--graph .context__cell {
+  padding: 10px 6px;
+  margin: -10px -6px;
+}
+
+/* The legend, one line along the stage's bottom edge: the glyphs with
+   their names, then how to move the picture (req 43). Inked in like the
+   title so it holds over the tree. */
+.glegend {
+  position: fixed;
+  right: 24px;
+  bottom: 16px;
+  left: 24px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 18px;
+  margin: 0;
+  color: #ffffff;
+  font-family: Barlow, sans-serif;
+  font-size: 11px;
+  line-height: 1.35;
+  text-shadow: var(--ink-shadow);
+}
+
+.glegend[hidden] {
+  display: none;
+}
+
+/* The glyphs and their names in a row; the help after them, divided off
+   by a hairline and pushed to the line's end. */
+.glegend__icons,
+.glegend__help {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.glegend__icons li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The glyphs and marks keep the line's dark ink (inherited) rather than
+   the boxes' cyan glow, so the whole line holds over the tree alike. */
+.glegend__icons .lucide,
+.glegend__mark {
+  flex: none;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--cyan);
+}
+
+.glegend__help {
+  margin-left: auto;
+  padding-left: 18px;
+  box-shadow: inset 1px 0 0 rgba(34, 230, 245, 0.16);
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+/* Each help item centres its marks on the text's middle. */
+.glegend__help li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.glegend__mark {
+  font-size: 11px;
+}
+
+.glegend__mark + .glegend__mark {
+  margin-left: -4px;
+}
+
+/* The search panel (req 43) in the stage's top right corner: a field,
+   type chips, a count line and the results beneath. Its colours are the
+   console's: deep teal glass in a dim cyan frame, cyan accents, white names. */
+.gsearch {
+  position: fixed;
+  top: 88px;
+  right: 24px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 300px;
+  /* Stops short of the legend line along the bottom edge (16px up, one
+     line of 15px, and the same 16px clear above it). */
+  max-height: calc(100vh - 88px - 47px);
+  margin: 0;
+  padding: 10px 14px 11px;
+  overflow: hidden;
+  border: 1px solid var(--glass-line);
+  border-radius: 8px;
+  box-shadow: var(--glass-shadow);
+  color: #ffffff;
+  font-family: Barlow, sans-serif;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.gsearch[hidden] {
+  display: none;
+}
+
+/* The glass of the search panel and the hover cards: the fixed pre-blurred
+   page under a teal tint, since Firefox 90 has no backdrop-filter. The hover
+   cards lift their text above it (.tip) instead of sinking the glass. */
+.gsearch::before,
+.gsearch::after,
+.graph__canvas .tooltip::before,
+.graph__canvas .tooltip::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+
+.graph__canvas .tooltip::before,
+.graph__canvas .tooltip::after {
+  z-index: 0;
+}
+
+.gsearch::before,
+.graph__canvas .tooltip::before {
+  background-image: url("img/bg-blur.jpeg");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+.gsearch::after,
+.graph__canvas .tooltip::after {
+  background-color: rgba(6, 28, 42, 0.84);
+  background-image: linear-gradient(180deg, rgba(14, 52, 72, 0.5), rgba(3, 16, 26, 0.6));
+}
+
+/* The field: a darker well in a cyan frame, the query in cyan. */
+.gsearch__field {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid var(--cyan-dim);
+  border-radius: var(--r-control);
+  background-color: rgba(2, 14, 22, 0.7);
+  transition: border-color var(--t), box-shadow var(--t);
+}
+
+.gsearch__field:focus-within {
+  border-color: var(--cyan);
+}
+
+.gsearch__field > .lucide {
+  flex: none;
+  font-size: var(--icon-sm);
+  color: var(--cyan);
+  opacity: 0.85;
+}
+
+.gsearch__field input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--cyan);
+  caret-color: var(--cyan);
+  font-family: Orbitron, Barlow, sans-serif;
+  font-size: var(--fs-label);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  outline: none;
+}
+
+.gsearch__field input::placeholder {
+  color: rgba(34, 230, 245, 0.55);
+  opacity: 1;
+}
+
+.gsearch__clear {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 2px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: rgba(34, 230, 245, 0.6);
+  font: inherit;
+  font-size: var(--icon-sm);
+  line-height: 1;
+  cursor: pointer;
+  transition: color var(--t);
+}
+
+.gsearch__clear:hover {
+  color: var(--cyan);
+}
+
+.gsearch__clear[hidden] {
+  display: none;
+}
+
+/* The type chips of the search's filter (req 43): dark tabs in a faint
+   cyan frame, pressed ones lit in cyan. None pressed means every type. */
+.gsearch__chips {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.gsearch__chip {
+  padding: 3px 9px;
+  border: 1px solid rgba(34, 230, 245, 0.28);
+  border-radius: 4px;
+  background-color: rgba(8, 36, 52, 0.85);
+  color: rgba(205, 240, 248, 0.85);
+  font: inherit;
+  font-size: var(--fs-chip);
+  letter-spacing: var(--ls-tight);
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color var(--t), border-color var(--t), background-color var(--t);
+}
+
+.gsearch__chip:hover {
+  border-color: var(--cyan-dim);
+  color: var(--cyan);
+}
+
+.gsearch__chip[aria-pressed="true"] {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background-color: var(--tint-cyan-strong);
+  box-shadow: 0 0 8px rgba(34, 230, 245, 0.25);
+}
+
+.gsearch__count {
+  flex: none;
+  margin: 0;
+  font-size: var(--fs-info);
+  letter-spacing: var(--ls-text);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.gsearch__count[hidden] {
+  display: none;
+}
+
+/* Only the results scroll; they run to the panel's edge. */
+.gsearch__results {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0 -14px -11px;
+  padding: 0 8px 8px;
+  overflow-y: auto;
+}
+
+.gsearch__results[hidden] {
+  display: none;
+}
+
+/* A row: faint cyan hairline between neighbours (drawn as a shadow so
+   the lit ring below needs no border of its own), white name, muted
+   path, the kind in a pill at the end. */
+.gsearch__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #ffffff;
+  transition: background-color var(--t), box-shadow var(--t);
+}
+
+.gsearch__row + .gsearch__row {
+  box-shadow: inset 0 1px 0 rgba(34, 230, 245, 0.16);
+}
+
+.gsearch__row:hover {
+  background-color: var(--tint-cyan);
+}
+
+/* The selected row (req 43) in the find's gold: an inset ring over a warm
+   fill, the next row's hairline dropped so the ring's bottom edge is not
+   doubled. Doubled class so it outweighs the separator rule above, which
+   would otherwise take the ring away when the mouse is off the row. */
+.gsearch__row.gsearch__row--active,
+.gsearch__row.gsearch__row--active:hover {
+  z-index: 1;
+  background-color: var(--tint-mark);
+  box-shadow: inset 0 0 0 1px var(--mark), 0 0 12px rgba(255, 209, 102, 0.35);
+}
+
+.gsearch__row--active + .gsearch__row {
+  box-shadow: none;
+}
+
+/* A copy line: the CSU listing an entity, indented under it. */
+.gsearch__row--copy {
+  padding-left: 30px;
+}
+
+.gsearch__glyph {
+  flex: none;
+  font-size: 14px;
+  color: var(--cyan);
+}
+
+.gsearch__row--copy .gsearch__glyph {
+  font-size: 12px;
+}
+
+.gsearch__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.gsearch__label {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gsearch__path {
+  overflow: hidden;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(185, 228, 238, 0.75);
+}
+
+.gsearch__kind {
+  flex: none;
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--cyan-dim);
+  border-radius: var(--r-pill);
+  background-color: rgba(2, 14, 22, 0.6);
+  font-size: var(--fs-chip);
+  letter-spacing: var(--ls-tight);
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+/* The canvas takes the whole stage. */
+.graph__stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.graph__canvas {
+  position: absolute;
+  inset: 0;
+  /* G6 isolates its container inline, which would trap the hover cards'
+     z-index under the fixed title and context line; its own children sit at
+     z-index auto, so nothing else rises above the overlays without it. */
+  isolation: auto !important;
+}
+
+/* Over the canvas while the file is read or drawn: the spinner alone, no veil. */
+.graph__stage > .empty {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+}
+
+/* ------------------------------------------------ boxes */
+
+/* The one card every box is drawn as (a G6 HTML node, SRS DSM-SMM req 6):
+   dark glass in a glowing cyan frame, glyph left, two lines of text, toggle right. */
+.box {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  height: 100%;
+  border: 2px solid rgba(34, 230, 245, 0.8);
+  border-radius: 8px;
+  /* No backdrop-filter: the page background is pre-blurred already, a blur
+     per card costs a frame's worth of time with hundreds on screen, and
+     Firefox 90 has none. The light teal glass alone gives the look. */
+  background-color: rgba(34, 230, 245, 0.12);
+  background-image: linear-gradient(180deg, rgba(120, 240, 255, 0.16), rgba(8, 60, 80, 0.3));
+  box-shadow: 0 0 10px rgba(34, 230, 245, 0.45), 0 0 2px rgba(34, 230, 245, 0.8), inset 0 0 12px rgba(34, 230, 245, 0.14);
+  color: #ffffff;
+  font-family: Barlow, sans-serif;
+  user-select: none;
+  transition: border-color var(--t), box-shadow var(--t), background-color var(--t);
+}
+
+/* The glyph, the two lines and the toggle: the whole card for most boxes,
+   the header of a relation card. */
+.box__head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 10px 0 11px;
+}
+
+.box__glyph {
+  flex: none;
+  width: 20px;
+  color: var(--cyan);
+  font-size: 18px;
+  text-align: center;
+  text-shadow: 0 0 6px rgba(34, 230, 245, 0.6);
+}
+
+.box__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.15;
+}
+
+.box__title,
+.box__sub {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.box__title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #ffffff;
+}
+
+.box__sub {
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  color: rgba(223, 238, 242, 0.7);
+}
+
+.box__sub::before {
+  content: "[";
+}
+
+.box__sub::after {
+  content: "]";
+}
+
+.box__toggle {
+  flex: none;
+  font-family: Barlow, sans-serif;
+  font-size: 12px;
+  color: var(--cyan);
+  text-shadow: 0 0 6px rgba(34, 230, 245, 0.5);
+}
+
+/* The rows of a relation card under its header (SRS DSM-SMM req 7). */
+.list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+  margin: 0 4px 6px;
+  padding-top: 4px;
+  border-top: 1px solid rgba(34, 230, 245, 0.35);
+}
+
+/* Past the cap the rows scroll inside the card, on the page's own scrollbar
+   (see the scrollbars section at the top). */
+.list--scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.list--scroll .list__row {
+  flex: none;
+}
+
+.list__row {
+  display: flex;
+  align-items: center;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+  white-space: nowrap;
+  transition: background-color var(--t), color var(--t);
+}
+
+.list__row + .list__row {
+  border-top: 1px solid rgba(34, 230, 245, 0.14);
+}
+
+.list__row:hover {
+  background-color: var(--tint-cyan);
+}
+
+/* The row the search landed on (req 43), in the find's gold; kept across
+   the card's re-renders. */
+.list__row--highlight,
+.list__row--highlight:hover {
+  background-color: var(--tint-mark-strong);
+  box-shadow: inset 0 0 0 1px var(--mark-dim);
+  color: var(--mark);
+  font-weight: 600;
+}
+
+.list__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.box--active {
+  border-color: #7df3ff;
+  box-shadow: 0 0 16px rgba(34, 230, 245, 0.65), 0 0 2px #7df3ff, inset 0 0 14px rgba(34, 230, 245, 0.22);
+}
+
+/* The box the search landed on (req 43): the find's gold frame and glow
+   over a warm fill, apart from the cyan boxes and the pointer's hover.
+   After the hover rule, so a box that is both shows the find. */
+.box--highlight {
+  border-color: var(--mark);
+  background: linear-gradient(180deg, rgba(255, 209, 102, 0.26), rgba(60, 46, 14, 0.92));
+  box-shadow: 0 0 0 1px var(--mark-dim), 0 0 22px rgba(255, 209, 102, 0.5), inset 0 0 18px rgba(255, 209, 102, 0.16);
+}
+
+/* Its glyph and [+]/[−] toggle take the gold too. */
+.box--highlight .box__glyph,
+.box--highlight .box__toggle {
+  color: var(--mark);
+  text-shadow: 0 0 6px rgba(255, 209, 102, 0.6);
+}
+
+/* The hover cards showing attributes (req 43), G6's for boxes and the
+   page's own for rows: the search panel's teal glass with a cyan rim. G6
+   writes its defaults inline, so each is overridden with !important to
+   keep both cards identical. */
+.graph__canvas .tooltip {
+  overflow: hidden;
+  border: 1px solid var(--glass-line) !important;
+  border-radius: 8px !important;
+  background: none !important;
+  z-index: 10 !important;
+  box-shadow: var(--glass-shadow) !important;
+  color: #ffffff !important;
+  font-family: Barlow, sans-serif !important;
+  font-size: 11.5px !important;
+  line-height: 1.35 !important;
+  min-width: 0 !important;
+  max-width: 320px !important;
+  padding: 9px 12px 10px !important;
+}
+
+/* The text over the glass. */
+.tip {
+  position: relative;
+  z-index: 1;
+}
+
+/* The page's own copy of the card, following the pointer over a row. */
+.graph__canvas .tooltip--row {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 10;
+  max-width: 320px;
+  pointer-events: none;
+}
+
+/* The header mirrors a search row: white bold name, the kind in a cyan pill.
+   A long name wraps, breaking inside a word when it has no spaces, and the
+   pill stays on the first line's end. */
+.tip__title {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 7px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  overflow-wrap: anywhere;
+  color: #ffffff;
+}
+
+.tip__kind {
+  flex: none;
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--cyan-dim);
+  border-radius: var(--r-pill);
+  background-color: rgba(2, 14, 22, 0.6);
+  font-size: var(--fs-chip);
+  font-weight: 400;
+  line-height: 1.35;
+  letter-spacing: var(--ls-tight);
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+.tip__kind:empty {
+  display: none;
+}
+
+/* The keys take only what they need; a long value wraps under itself,
+   breaking inside a word when it has no spaces. */
+.tip__rows {
+  display: grid;
+  grid-template-columns: minmax(auto, 96px) minmax(0, 1fr);
+  gap: 3px 12px;
+  margin: 0;
+  padding-top: 7px;
+  border-top: 1px solid rgba(34, 230, 245, 0.16);
+}
+
+.tip__rows dt {
+  align-self: center;
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(185, 228, 238, 0.75);
+}
+
+.tip__rows dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #ffffff;
+}
+
 
 /* ------------------------------------------------ keyboard focus */
 
@@ -2329,7 +3110,8 @@ html::-webkit-scrollbar-corner,
 .console:focus-visible,
 .field:focus-within,
 .picker__control:focus-within,
-.units:focus-within {
+.units:focus-within,
+.gsearch__field:focus-within {
   outline: none;
   box-shadow: var(--glow-cyan);
 }

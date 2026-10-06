@@ -49,6 +49,8 @@
  * below. Built with fontTools from
  * https://cdn.jsdelivr.net/npm/lucide-static@1.43.0/font/lucide.woff2:
  * pyftsubset lucide.woff2 --unicodes=U+e049,... --flavor=woff2 --output-file=lucide-subset.woff2
+ * (36 glyphs at present; the graph stage uses the ship, layers, boxes,
+ * box, cpu, server, radio, mail and library ones)
  */
 @font-face {
   font-family: lucide;
@@ -74,8 +76,14 @@
 .lucide-arrow-right::before {
   content: "\e049";
 }
+.lucide-box::before {
+  content: "\e061";
+}
 .lucide-box-select::before {
   content: "\e1cb";
+}
+.lucide-boxes::before {
+  content: "\e2d0";
 }
 .lucide-check::before {
   content: "\e06c";
@@ -92,6 +100,9 @@
 .lucide-circle-x::before {
   content: "\e084";
 }
+.lucide-cpu::before {
+  content: "\e0a9";
+}
 .lucide-database::before {
   content: "\e0ad";
 }
@@ -107,17 +118,29 @@
 .lucide-file-code::before {
   content: "\e0c3";
 }
+.lucide-git-fork::before {
+  content: "\e28d";
+}
 .lucide-hard-drive::before {
   content: "\e0ed";
 }
 .lucide-key::before {
   content: "\e0fd";
 }
+.lucide-layers::before {
+  content: "\e529";
+}
+.lucide-library::before {
+  content: "\e100";
+}
 .lucide-list-checks::before {
   content: "\e1d0";
 }
 .lucide-log-out::before {
   content: "\e10e";
+}
+.lucide-mail::before {
+  content: "\e10f";
 }
 .lucide-network::before {
   content: "\e125";
@@ -128,7 +151,9 @@
 .lucide-pencil::before {
   content: "\e1f9";
 }
-
+.lucide-radio::before {
+  content: "\e142";
+}
 .lucide-rocket::before {
   content: "\e286";
 }
@@ -140,6 +165,9 @@
 }
 .lucide-server::before {
   content: "\e153";
+}
+.lucide-ship::before {
+  content: "\e3ba";
 }
 .lucide-triangle-alert::before {
   content: "\e193";

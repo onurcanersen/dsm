@@ -1,10 +1,10 @@
 """The node-relationship graph and the QoS-derived topic attributes
-(SRS DSM-MDG req 19; DSM-SMM req 6-7)."""
+(SRS DSM-MDG req 2.4, 19; DSM-SMM req 6-7)."""
 
 from fakes import seed
 from mdg.domain.inventory import SoftwareUnitVersionInventory
 from mdg.domain.model_setup_data_graph import ModelSetupDataGraph
-from mdg.domain.source_data import Message, RelationKind, Topic, UnitRelation
+from mdg.domain.source_data import ConnectsTo, Message, Network, Node, RelationKind, Topic, UnitRelation
 
 APP_NODES = [(seed.NAV_APP, seed.NODE_0), (seed.SENSOR_APP, seed.NODE_1)]
 RELATIONS = [
@@ -14,6 +14,15 @@ RELATIONS = [
     UnitRelation(seed.SENSOR_APP, seed.SENSOR_DATA, RelationKind.PUBLISHES),
     UnitRelation(seed.NAV_APP, seed.MSG_NAV_POSITION, RelationKind.SEND),
     UnitRelation(seed.SENSOR_APP, seed.MSG_NAV_POSITION, RelationKind.RECEIVE),
+]
+NODE_ATTRS = [
+    Node(seed.NODE_0, group="processors", hw="x86-64/8c", os="Linux 5.15", mw="DDS", gpu="none", display="none"),
+]
+NETWORKS = [Network(seed.SWITCH_0, purpose="backbone"), Network(seed.SWITCH_1, purpose="sensor")]
+CONNECTS = [
+    ConnectsTo(seed.NODE_0, seed.SWITCH_0, device="eth0", dev_raw="ens1f0"),
+    ConnectsTo(seed.NODE_1, seed.SWITCH_1, device="eth0", dev_raw="ens1f0"),
+    ConnectsTo(seed.NODE_0, seed.GHOST_SWITCH, device="eth1", dev_raw="ens1f1"),
 ]
 TOPICS = [
     Topic(seed.NAV_POSITION, 6138, "PERSISTENT", "BEST_EFFORT", "LOW"),
@@ -25,15 +34,24 @@ MESSAGES = [
 ]
 
 
-def _graph(app_roles=None, app_criticality=None):
-    inventory = SoftwareUnitVersionInventory(seed.CONTEXT, seed.inventory_rows()).without(seed.SYSTEM_REPO)
-    return ModelSetupDataGraph.build(APP_NODES, app_roles or {}, app_criticality or {}, RELATIONS, TOPICS, MESSAGES, inventory, {})
+def _graph(app_roles=None, app_criticality=None, nodes=NODE_ATTRS, networks=NETWORKS, connects=CONNECTS):
+    inventory = SoftwareUnitVersionInventory(seed.CONTEXT, seed.inventory_rows()).without(seed.SYSTEM_REPO).without(seed.ANSIBLE_REPO)
+    return ModelSetupDataGraph.build(
+        APP_NODES, app_roles or {}, app_criticality or {}, [*RELATIONS, *connects], TOPICS, MESSAGES, inventory, {},
+        nodes, networks,
+    )
 
 
 def test_entities_get_sorted_ids_and_inventory_versions():
     graph = _graph()
 
-    assert graph["nodes"] == [{"id": "N0", "name": seed.NODE_0}, {"id": "N1", "name": seed.NODE_1}]
+    assert graph["nodes"] == [
+        {"id": "N0", "name": seed.NODE_0, "group": "processors", "hw": "x86-64/8c", "os": "Linux 5.15", "mw": "DDS", "gpu": "none", "display": "none"},
+        {"id": "N1", "name": seed.NODE_1, "group": "NOT_FOUND", "hw": "NOT_FOUND", "os": "NOT_FOUND", "mw": "NOT_FOUND", "gpu": "NOT_FOUND", "display": "NOT_FOUND"},
+    ]
+    assert [(w["id"], w["name"], w["purpose"]) for w in graph["networks"]] == [
+        ("W0", seed.SWITCH_0, "backbone"), ("W1", seed.SWITCH_1, "sensor"),
+    ]
     assert [(a["id"], a["name"], a["version"]) for a in graph["applications"]] == [
         ("A0", seed.NAV_APP, seed.VERSION), ("A1", seed.SENSOR_APP, seed.VERSION),
     ]
@@ -43,7 +61,30 @@ def test_entities_get_sorted_ids_and_inventory_versions():
         ("M0", "MSG-001", seed.MSG_NAV_POSITION, 6138, 20.0),
         ("M1", "MSG-002", seed.MSG_SENSOR_DATA, 1207, 100.0),
     ]
-    assert graph["metadata"]["scale"] == {"apps": 2, "topics": 2, "messages": 2, "nodes": 2, "libraries": 1}
+    assert graph["metadata"]["scale"] == {"apps": 2, "topics": 2, "messages": 2, "nodes": 2, "libraries": 1, "networks": 2}
+
+
+def test_connects_to_join_node_and_network_ids_by_name_and_drop_unresolvable():
+    relationships = _graph()["relationships"]
+
+    assert relationships["connects_to"] == [
+        {"from": "N0", "to": "W0", "device": "eth0", "dev_raw": "ens1f0"},
+        {"from": "N1", "to": "W1", "device": "eth0", "dev_raw": "ens1f0"},
+    ]
+
+
+def test_connects_device_fields_default_to_not_found():
+    graph = _graph(connects=[ConnectsTo(seed.NODE_0, seed.SWITCH_0)])
+
+    assert graph["relationships"]["connects_to"] == [{"from": "N0", "to": "W0", "device": "NOT_FOUND", "dev_raw": "NOT_FOUND"}]
+
+
+def test_without_ansible_data_nodes_are_not_found_and_network_lists_empty():
+    graph = _graph(nodes=[], networks=[], connects=[])
+
+    assert graph["networks"] == []
+    assert graph["relationships"]["connects_to"] == []
+    assert all(graph["nodes"][1][key] == "NOT_FOUND" for key in ("group", "hw", "os", "mw", "gpu", "display"))
 
 
 def test_relationships_join_by_entity_id():

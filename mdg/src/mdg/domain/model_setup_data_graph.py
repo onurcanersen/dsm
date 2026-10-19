@@ -1,18 +1,19 @@
 """The node-relationship graph of the Model Setup Data: processor units,
-topics, applications, libraries and the runs_on / publishes_to /
-subscribes_to / uses relationships between them (SRS DSM-MDG req 19;
-DSM-SMM req 6-7)."""
+topics, applications, libraries and networks, and the runs_on / publishes_to /
+subscribes_to / uses / connects_to relationships between them (SRS DSM-MDG
+req 19; DSM-SMM req 6-7)."""
 
 from __future__ import annotations
 
 import random
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 from mdg.domain.inventory import SoftwareUnitVersionInventory
-from mdg.domain.source_data import Message, RelationKind, Topic, UnitRelation
+from mdg.domain.source_data import ConnectsTo, Message, Network, Node, RelationKind, Topic, UnitRelation
 from mdg.domain.system_hierarchy import SystemHierarchyRecord
 
 NOT_FOUND = "NOT_FOUND"
+_NODE_FIELDS = ("group", "hw", "os", "mw", "gpu", "display")
 
 
 class ModelSetupDataGraph:
@@ -27,11 +28,13 @@ class ModelSetupDataGraph:
         app_node_relations: List[Tuple[str, str]],
         app_roles: Dict[str, List[str]],
         app_criticality: Dict[str, bool],
-        relations: List[UnitRelation],
+        relations: List[Union[UnitRelation, ConnectsTo]],
         topics: Iterable[Topic],
         messages: Iterable[Message],
         inventory: SoftwareUnitVersionInventory,
         hierarchy_by_unit: Dict[str, Optional[SystemHierarchyRecord]],
+        nodes: Iterable[Node] = (),
+        networks: Iterable[Network] = (),
     ) -> Dict[str, Any]:
         """The graph of one run (req 19)."""
         versions = {u.unit_name: u.version for u in inventory.units}
@@ -45,9 +48,22 @@ class ModelSetupDataGraph:
         topic_ids = cls._ids("T", list(topics_by_name))
         messages_by_name = {m.name: m for m in messages}
         message_ids = cls._ids("M", list(messages_by_name))
+        node_enrichment = {n.name: n for n in nodes}
+        networks_by_name = {n.name: n for n in networks}
+        network_ids = cls._ids("W", list(networks_by_name))
 
-        publishes_to, subscribes_to, sends, receives, uses = [], [], [], [], []
+        publishes_to, subscribes_to, sends, receives, uses, connects_to = [], [], [], [], [], []
         for relation in relations:
+            if relation.kind is RelationKind.CONNECTS_TO:
+                source = node_ids.get(relation.from_name) or network_ids.get(relation.from_name)
+                target = node_ids.get(relation.to_name) or network_ids.get(relation.to_name)
+                if source is None or target is None:
+                    continue
+                connects_to.append({
+                    "from": source, "to": target,
+                    "device": relation.device or NOT_FOUND, "dev_raw": relation.dev_raw or NOT_FOUND,
+                })
+                continue
             source = app_ids.get(relation.unit_name) or lib_ids.get(relation.unit_name)
             if source is None:
                 continue
@@ -66,14 +82,19 @@ class ModelSetupDataGraph:
                         for name in app_ids]
         libraries = [{"id": lib_ids[name], "name": name, "version": versions.get(name, NOT_FOUND),
                       "system_hierarchy": cls._hierarchy(hierarchy_by_unit.get(name))} for name in lib_ids]
-        nodes = [{"id": node_ids[name], "name": name} for name in node_ids]
+        nodes_payload = [{"id": node_ids[name], "name": name, **cls._node_attributes(node_enrichment.get(name))}
+                         for name in node_ids]
+        network_payload = [{"id": network_ids[name], "name": name, "purpose": networks_by_name[name].purpose or NOT_FOUND}
+                           for name in network_ids]
         topic_payload = [cls._topic(topics_by_name[name], topic_ids[name]) for name in topic_ids]
         message_payload = [cls._message(messages_by_name[name], message_ids[name]) for name in message_ids]
 
         return {
             "metadata": {"scale": {"apps": len(applications), "topics": len(topic_payload), "messages": len(message_payload),
-                                    "nodes": len(nodes), "libraries": len(libraries)}},
-            "nodes": nodes,
+                                    "nodes": len(nodes_payload), "libraries": len(libraries),
+                                    "networks": len(network_payload)}},
+            "nodes": nodes_payload,
+            "networks": network_payload,
             "topics": topic_payload,
             "messages": message_payload,
             "applications": applications,
@@ -86,12 +107,19 @@ class ModelSetupDataGraph:
                 "sends": sends,
                 "receives": receives,
                 "uses": uses,
+                "connects_to": connects_to,
             },
         }
 
     @staticmethod
     def _ids(prefix: str, names: List[str]) -> Dict[str, str]:
         return {name: f"{prefix}{i}" for i, name in enumerate(sorted(set(names)))}
+
+    @staticmethod
+    def _node_attributes(node: Optional[Node]) -> Dict[str, str]:
+        if node is None:
+            return {key: NOT_FOUND for key in _NODE_FIELDS}
+        return {key: getattr(node, key) or NOT_FOUND for key in _NODE_FIELDS}
 
     @classmethod
     def _application(cls, name, app_id, versions, app_roles, app_criticality, hierarchy_by_unit) -> Dict[str, Any]:

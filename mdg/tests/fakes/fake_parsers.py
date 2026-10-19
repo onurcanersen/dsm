@@ -7,7 +7,8 @@ from pathlib import Path
 from typing import Dict, List, Set, Tuple
 
 from fakes import seed
-from mdg.domain.source_data import Message, RelationKind, Topic, UnitRelation
+from mdg.domain.source_data import ConnectsTo, Message, Network, Node, RelationKind, Topic, UnitRelation
+from mdg.ports.ansible_repo_parser import IAnsibleRepoParser
 from mdg.ports.build_runner import IBuildRunner
 from mdg.ports.message_file_parser import IMessageFileParser
 from mdg.ports.source_code_parser import ISourceCodeParser
@@ -47,6 +48,38 @@ def system_repo_parser_class(calls: Calls, app_nodes: List[Tuple[str, str]] = No
 
     FakeSystemRepoParser.instances = []
     return FakeSystemRepoParser
+
+
+def ansible_repo_parser_class(calls: Calls):
+    """A fake IAnsibleRepoParser class the run constructs on the cloned ansible
+    repo; its connects include one to an undeclared network for the drop test."""
+
+    class FakeAnsibleRepoParser(IAnsibleRepoParser):
+        def __init__(self, ansible_repo_dir: Path, project_name: str, platform_name: str):
+            self.ansible_repo_dir = ansible_repo_dir
+            self.project_name = project_name
+            self.platform_name = platform_name
+            calls.log.append(("ansible_repo_parser", str(ansible_repo_dir)))
+            FakeAnsibleRepoParser.instances.append(self)
+
+        def get_nodes(self):
+            return [
+                Node(seed.NODE_0, group="processors", hw="x86-64/8c", os="Linux 5.15", mw="DDS", gpu="none", display="none"),
+                Node(seed.NODE_1, group="processors", hw="x86-64/4c", os="Linux 5.15", mw="DDS", gpu="integrated", display="hdmi"),
+            ]
+
+        def get_networks(self):
+            return [Network(seed.SWITCH_0, purpose="backbone")]
+
+        def get_connects_to(self):
+            return [
+                ConnectsTo(seed.NODE_0, seed.SWITCH_0, device="eth0", dev_raw="ens1f0"),
+                ConnectsTo(seed.NODE_1, seed.SWITCH_0, device="eth0", dev_raw="ens1f0"),
+                ConnectsTo(seed.NODE_0, seed.GHOST_SWITCH, device="eth1", dev_raw="ens1f1"),
+            ]
+
+    FakeAnsibleRepoParser.instances = []
+    return FakeAnsibleRepoParser
 
 
 class FakeSourceCodeParser(ISourceCodeParser):

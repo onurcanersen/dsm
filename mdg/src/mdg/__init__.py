@@ -2,11 +2,11 @@
 
 A run (`produce_model_setup_data`) acquires the project context and the
 Software Unit Version Inventory from the configuration management database
-(req 5-11), clones the system repo named in mdg.ini and parses it (req 3,
-13), clones the software units it names and records their files and errors
-(req 13-16), regenerates and parses each unit's source data, parses type
-support once, checks mandatory fields (req 17-18) and saves the Model Setup
-Data file under the workspace (req 19).
+(req 5-11), clones the system repo and the ansible repo named in mdg.ini and
+parses them (req 2.4, 3, 13), clones the software units the system repo names
+and records their files and errors (req 13-16), regenerates and parses each
+unit's source data, parses type support once, checks mandatory fields
+(req 17-18) and saves the Model Setup Data file under the workspace (req 19).
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from mdg.adapters.model_setup_data.filesystem_model_setup_data_store import File
 from mdg.adapters.source_code.git_source_code_repository import GitSourceCodeRepository
 from mdg.adapters.source_code.gmake_build_runner import GmakeBuildRunner
 from mdg.adapters.source_code.mandatory_files import MandatoryFiles
+from mdg.adapters.source_data.ansible_repo_parser import AnsibleRepoParser
 from mdg.adapters.source_data.message_file_parser import MessageFileParser
 from mdg.adapters.source_data.source_code_parser import SourceCodeParser
 from mdg.adapters.source_data.system_repo_parser import SystemRepoParser
@@ -30,7 +31,7 @@ from mdg.domain.data_source import DataSourceConfig, SourceType
 from mdg.domain.error_record import DataAcquisitionError, ErrorRecord, ErrorStatus
 from mdg.domain.inventory import CandidateUnitVersion
 from mdg.domain.model_setup_data import InvalidModelSetupData, ModelSetupDataRecord
-from mdg.domain.source_data import Message, Topic, UnitRelation
+from mdg.domain.source_data import ConnectsTo, Message, Topic, UnitRelation
 from mdg.domain.workspace import Workspace
 from mdg.ports.config_management_repository import ConfigManagementAccessError, IConfigManagementRepository
 from mdg.ports.model_setup_data_store import IModelSetupDataStore
@@ -73,6 +74,7 @@ __all__ = [
 MANDATORY_FIELD_RULES = [
     MandatoryFieldRule("file_name", AcquiredFile),
     MandatoryFieldRule("target", UnitRelation),
+    MandatoryFieldRule("to_name", ConnectsTo),
     MandatoryFieldRule("name", Topic),
     MandatoryFieldRule("id", Message),
     MandatoryFieldRule("name", Message),
@@ -125,6 +127,7 @@ def produce_model_setup_data(
         build_inventory=BuildSoftwareUnitInventory(config_repo),
         acquire_source_code=AcquireSourceCode(source_repo),
         system_repo_parser=SystemRepoParser,
+        ansible_repo_parser=AnsibleRepoParser,
         source_code_parser=SourceCodeParser(settings.source_parser, files),
         type_support_parser=TypeSupportParser,
         message_file_parser=MessageFileParser,
@@ -133,6 +136,7 @@ def produce_model_setup_data(
         store=model_setup_data_store(workspace),
         workspace=_workspace(workspace),
         system_repo_name=settings.workspace.system_repo,
+        ansible_repo_name=settings.workspace.ansible_repo,
         run_regenerate_code=settings.build.run_regenerate_code,
     ).execute(project_id, platform_id, version_id, run_id, produced_by, candidates, progress)
 

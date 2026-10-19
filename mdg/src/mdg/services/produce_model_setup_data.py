@@ -1,20 +1,24 @@
 """Produces the Model Setup Data of one run: acquires the context, the
-inventory, the system repo (cloned without the unit file rule) and the
-software units it names, parses them and saves the file (SRS DSM-MDG req 3, 5-19)."""
+inventory, the system repo and the ansible repo (both cloned without the unit
+file rule) and parses them, clones and parses the software units the system
+repo names, merges the ansible repo's connects into the relations, and saves
+the file (SRS DSM-MDG req 2.4, 3, 5-19)."""
 
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 from mdg.domain.data_source import SourceType
 from mdg.domain.error_record import DataAcquisitionError, ErrorRecord, ErrorStatus
 from mdg.domain.inventory import CandidateUnitVersion, SoftwareUnitVersion
 from mdg.domain.model_setup_data import ModelSetupData, UnitStatus
 from mdg.domain.model_setup_data_graph import ModelSetupDataGraph
+from mdg.domain.source_data import ConnectsTo, UnitRelation
 from mdg.domain.workspace import Workspace
+from mdg.ports.ansible_repo_parser import AnsibleRepoParserFactory
 from mdg.ports.build_runner import IBuildRunner
 from mdg.ports.config_management_repository import IConfigManagementRepository
 from mdg.ports.message_file_parser import MessageFileParserFactory
@@ -77,8 +81,8 @@ class _Progress:
 
 class ProduceModelSetupData:
     """Runs the production process in a run directory keyed by run id and
-    returns the ProductionResult; a failure to acquire the context or the
-    system repo raises DataAcquisitionError (req 12)."""
+    returns the ProductionResult; a failure to acquire the context, the
+    system repo or the ansible repo raises DataAcquisitionError (req 12)."""
 
     def __init__(
         self,
@@ -87,6 +91,7 @@ class ProduceModelSetupData:
         build_inventory: BuildSoftwareUnitInventory,
         acquire_source_code: AcquireSourceCode,
         system_repo_parser: SystemRepoParserFactory,
+        ansible_repo_parser: AnsibleRepoParserFactory,
         source_code_parser: ISourceCodeParser,
         type_support_parser: TypeSupportParserFactory,
         message_file_parser: MessageFileParserFactory,
@@ -95,6 +100,7 @@ class ProduceModelSetupData:
         store: IModelSetupDataStore,
         workspace: Workspace,
         system_repo_name: str,
+        ansible_repo_name: str,
         run_regenerate_code: bool = False,
     ):
         self._config_repo = config_repo
@@ -102,6 +108,7 @@ class ProduceModelSetupData:
         self._build_inventory = build_inventory
         self._acquire = acquire_source_code
         self._system_repo_parser = system_repo_parser
+        self._ansible_repo_parser = ansible_repo_parser
         self._source_code_parser = source_code_parser
         self._type_support_parser = type_support_parser
         self._message_file_parser = message_file_parser
@@ -110,6 +117,7 @@ class ProduceModelSetupData:
         self._store = store
         self._workspace = workspace
         self._system_repo_name = system_repo_name
+        self._ansible_repo_name = ansible_repo_name
         self._run_regenerate_code = run_regenerate_code
 
     def execute(
@@ -134,9 +142,14 @@ class ProduceModelSetupData:
         if system_unit is None:
             raise DataAcquisitionError(self._missing(f"system repo '{self._system_repo_name}' is not in the inventory", self._system_repo_name, context))
         inventory = inventory.without(system_unit.unit_name)
-        # Context, the system repo cloned and parsed, every unit cloned and parsed, and
-        # the file saved; the inventory bounds the units until the system repo names them.
-        steps = _Progress(progress, total=4 + 2 * len(inventory.units))
+        ansible_unit = inventory.find(self._ansible_repo_name)
+        if ansible_unit is None:
+            raise DataAcquisitionError(self._missing(f"ansible repo '{self._ansible_repo_name}' is not in the inventory", self._ansible_repo_name, context))
+        inventory = inventory.without(ansible_unit.unit_name)
+        # Context, the system repo and the ansible repo cloned and parsed, every unit
+        # cloned and parsed, and the file saved; the inventory bounds the units until
+        # the system repo names them.
+        steps = _Progress(progress, total=6 + 2 * len(inventory.units))
         steps.advance("context")
         system = self._acquire.execute(system_unit, run_dir, context, mandatory=False)
         if system.unit_dir is None:
@@ -145,8 +158,16 @@ class ProduceModelSetupData:
         parser = self._system_repo_parser(system.unit_dir, context.project.name, context.platform.name)
         app_node_relations = parser.get_app_node_relation()
         steps.advance("system")
+        ansible = self._acquire.execute(ansible_unit, run_dir, context, mandatory=False)
+        if ansible.unit_dir is None:
+            raise DataAcquisitionError(ansible.errors[0])
+        steps.advance("ansible")
+        ansible_parser = self._ansible_repo_parser(ansible.unit_dir, context.project.name, context.platform.name)
+        ansible_nodes, ansible_networks = ansible_parser.get_nodes(), ansible_parser.get_networks()
+        ansible_connects = ansible_parser.get_connects_to()
+        steps.advance("ansible")
 
-        files, errors = list(system.files), list(system.errors)
+        files, errors = [*system.files, *ansible.files], [*system.errors, *ansible.errors]
         units: List[SoftwareUnitVersion] = []
         for app_name in dict.fromkeys(app for app, _ in app_node_relations):
             unit = inventory.find(app_name)
@@ -154,7 +175,7 @@ class ProduceModelSetupData:
                 errors.append(self._missing(f"application '{app_name}' is not in the inventory", app_name, context))
             else:
                 units.append(unit)
-        steps.retotal(4 + 2 * len(units))
+        steps.retotal(6 + 2 * len(units))
 
         acquisitions: List[Acquisition] = []
         for unit in units:
@@ -175,12 +196,12 @@ class ProduceModelSetupData:
         topics = self._type_support_parser(run_dir).get_topic_list()
         message_parser = self._message_file_parser(run_dir)
         messages = message_parser.get_message_list()
-        all_relations = [*relations, *message_parser.get_message_relations()]
+        all_relations: List[Union[UnitRelation, ConnectsTo]] = [*relations, *message_parser.get_message_relations(), *ansible_connects]
         errors.extend(self._check.execute([*files, *all_relations, *topics, *messages], context))
         hierarchy = {u.unit_name: self._config_repo.get_system_hierarchy(u.unit_name) for u in inventory.units}
         graph = ModelSetupDataGraph.build(
             app_node_relations, parser.get_app_role_relation(), parser.get_app_criticality_relation(),
-            all_relations, topics, messages, inventory, hierarchy,
+            all_relations, topics, messages, inventory, hierarchy, ansible_nodes, ansible_networks,
         )
         data = ModelSetupData(context, inventory, files, errors, graph, produced_by=produced_by)
         path = self._store.save(data, run_id)

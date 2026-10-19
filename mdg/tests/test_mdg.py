@@ -40,7 +40,7 @@ def test_result_names_the_file_the_units_the_scale_and_no_errors(tmp_path: Path)
         {"unit_name": seed.NAV_APP, "version": seed.VERSION, "is_candidate": False, "status": "ok"},
         {"unit_name": seed.SENSOR_APP, "version": seed.VERSION, "is_candidate": False, "status": "ok"},
     ]
-    assert result["scale"] == {"apps": 2, "topics": 2, "messages": 2, "nodes": 2, "libraries": 1}
+    assert result["scale"] == {"apps": 2, "topics": 2, "messages": 2, "nodes": 2, "libraries": 1, "networks": 2}
     assert result["candidates"] == []
     assert result["errors"] == []
 
@@ -69,6 +69,15 @@ def test_saved_file_holds_the_whole_model_setup_data(tmp_path: Path):
     ]
     assert graph["relationships"]["sends"] == [{"from": "A0", "to": "M0"}, {"from": "A1", "to": "M1"}]
     assert graph["relationships"]["receives"] == [{"from": "A1", "to": "M0"}, {"from": "A0", "to": "M1"}]
+    assert {n["name"]: n["group"] for n in graph["nodes"]} == {seed.NODE_0: "processors", seed.NODE_1: "processors"}
+    assert [(w["id"], w["name"], w["purpose"]) for w in graph["networks"]] == [
+        ("W0", seed.SWITCH_0, "backbone"), ("W1", seed.SWITCH_1, "sensor"),
+    ]
+    assert graph["relationships"]["connects_to"] == [
+        {"from": "N0", "to": "W0", "device": "eth0", "dev_raw": "ens1f0"},
+        {"from": "N1", "to": "W0", "device": "eth0", "dev_raw": "ens1f0"},
+        {"from": "N0", "to": "W1", "device": "eth1", "dev_raw": "ens1f1"},
+    ]
 
 
 def test_no_producer_is_recorded_when_none_is_named(tmp_path: Path):
@@ -138,8 +147,8 @@ def test_progress_reports_the_percent_and_phase_after_each_work_unit(tmp_path: P
     _produce(tmp_path, progress=lambda percent, phase: reports.append((percent, phase)))
 
     assert reports == [
-        (10, "context"), (20, "system"), (30, "system"),
-        (50, "clone"), (62, "clone"), (75, "parse"), (87, "parse"), (100, "finalize"),
+        (8, "context"), (16, "system"), (25, "system"), (33, "ansible"), (41, "ansible"),
+        (60, "clone"), (70, "clone"), (80, "parse"), (90, "parse"), (100, "finalize"),
     ]
 
 

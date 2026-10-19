@@ -1,6 +1,7 @@
-"""Source data parsed from the acquired software units: the relationships a
-unit has with topics and libraries, and topics with their QoS
-(SRS DSM-MDG req 19; DSM-SMM req 6-7)."""
+"""Source data parsed from the acquired software units and the ansible repo:
+the relationships a unit has with topics and libraries, topics with their QoS,
+the node enrichment, networks and connects of the ansible repo
+(SRS DSM-MDG req 2.4, 3, 19; DSM-SMM req 6-7)."""
 
 from __future__ import annotations
 
@@ -10,12 +11,15 @@ from typing import ClassVar, Dict, List, Optional, Tuple
 
 
 class RelationKind(Enum):
-    """The relationship kinds a software unit source declares (DSM-SMM req 7)."""
+    """The relationship kinds the graph's relations pipeline carries: those a
+    software unit source declares (DSM-SMM req 7) and the ansible repo's
+    connects (SRS DSM-MDG req 2.4, 3)."""
     PUBLISHES = "publishes"
     SUBSCRIBES = "subscribes"
     USES = "uses"
     SEND = "send"
     RECEIVE = "receive"
+    CONNECTS_TO = "connects_to"
 
 
 @dataclass(frozen=True)
@@ -82,3 +86,35 @@ class Message:
 
     def __eq__(self, other: object) -> bool:
         return isinstance(other, Message) and self.name == other.name
+
+
+@dataclass(frozen=True)
+class Node:
+    """The enrichment the ansible repo adds to a graph node by name; it
+    declares no graph node of its own (SRS DSM-MDG req 2.4, 3)."""
+    name: str
+    group: Optional[str] = None
+    hw: Optional[str] = None
+    os: Optional[str] = None
+    mw: Optional[str] = None
+    gpu: Optional[str] = None
+    display: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class Network:
+    """A network the ansible repo declares, with its purpose (SRS DSM-MDG req 2.4, 3)."""
+    name: str
+    purpose: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class ConnectsTo:
+    """One connection between a node and a network with its device names, the
+    relation record of kind CONNECTS_TO mirroring UnitRelation's role
+    (SRS DSM-MDG req 2.4, 3; DSM-SMM req 7)."""
+    from_name: str
+    to_name: str
+    kind: RelationKind = RelationKind.CONNECTS_TO
+    device: Optional[str] = None
+    dev_raw: Optional[str] = None

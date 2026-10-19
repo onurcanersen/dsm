@@ -73,9 +73,12 @@
     // The run card: the product's name over the context line and the console.
     run: { title: "Model Setup Data" },
     model: { title: "Core System Model" },
-    // The graph stage: the same title over the context line, on the left.
-    graph: { title: "Core System Model" }
+    // The graph stage: the mode's name as the title, which is the mode switch.
+    graph: { title: "Software" }
   };
+
+  // The graph stage's two pictures and the words the title shows for them.
+  var GRAPH_TITLES = { sw: "Software", hw: "Hardware" };
 
   var PRODUCT_TITLE = "Digital System Model";
 
@@ -107,6 +110,8 @@
     versions: null,
     // The saved {view, model_file} read on boot to choose the card to resume on.
     ui: null,
+    // The graph stage's picture: "sw" the hierarchy tree, "hw" the networks and nodes.
+    graphMode: "sw",
     // The run being tracked: {task_id, project_id, platform_id, version_id, candidates}.
     activeTask: null,
     // The last run that ended for this selection, {task_id, project_id, platform_id,
@@ -179,13 +184,18 @@
     VIEWS.forEach(function (view) {
       $("view-" + view).hidden = view !== name;
     });
-    renderHeader(HEADERS[name]);
+    if (name === "graph") {
+      renderGraphTitle();
+    } else {
+      renderHeader(HEADERS[name]);
+    }
     renderStepper(name);
     el.card.setAttribute("data-view", name);
     el.shell.classList.toggle("shell--run", name === "run");
     el.shell.classList.toggle("shell--model", name === "model");
     el.shell.classList.toggle("shell--graph", name === "graph");
     document.body.classList.toggle("body--graph", name === "graph");
+    document.body.classList.toggle("body--run", name === "run");
     renderSessionbar(STAGES.indexOf(name) !== -1);
     renderRunIndicator();
 
@@ -303,6 +313,7 @@
     state.lastRun = !state.activeTask && tracks(saved.last_run, state.selection) ? saved.last_run : null;
     runResultUnseen = !!state.lastRun && !state.lastRun.seen;
     state.ui = { view: saved.view || null, model_file: saved.model_file || null };
+    state.graphMode = saved.graph_mode === "hw" ? "hw" : "sw";
     // A run in flight owns the candidates it evaluates (SRS DSM-MDG req 11).
     state.candidates = candidateMap(state.activeTask ? state.activeTask.candidates : savedCandidates(saved));
   }
@@ -367,6 +378,7 @@
         last_run: state.lastRun,
         view: state.view,
         model_file: state.modelFile ? state.modelFile.run_id : null,
+        graph_mode: state.graphMode,
         candidates: candidateList()
       })
     );
@@ -1345,7 +1357,7 @@
     return row;
   }
 
-  // The same four counts the model card's scale cells show.
+  // The same counts the model card's scale cells show, in their order.
   function scaleSummary(scale) {
     var parts = [];
     SCALE_CELLS.forEach(function (cell) {
@@ -1584,18 +1596,8 @@
     renderRunProgress(taskState, status);
     renderRunElapsed(taskState, status);
     renderConsoleTail(taskState);
-    // The panel's frame keeps the outcome's colour once the run has ended.
-    if (RUN_TERMINAL[taskState]) {
-      el.runStatus.setAttribute("data-outcome", taskState === "SUCCESS" ? "ok" : "bad");
-    } else {
-      el.runStatus.removeAttribute("data-outcome");
-    }
-
-    // On success the summary of what was produced stands where the message would.
-    el.runSummary.hidden = !ready;
-    if (ready) {
-      renderRunSummary(status.result);
-    }
+    // Under the panel: the run's error alone; a success speaks through the
+    // bar's tone and the View model action.
     if (status && status.error) {
       setMessage("run", "error", status.error);
     } else if (taskState === "SUCCESS") {
@@ -1703,26 +1705,6 @@
     return rest + " s";
   }
 
-  // The run's outcome in chips, named as the model card's scale cells.
-  function renderRunSummary(result) {
-    el.runSummary.textContent = "";
-    var scale = (result && result.scale) || {};
-
-    SCALE_CELLS.forEach(function (cell) {
-      if (scale[cell.key] !== undefined) {
-        el.runSummary.appendChild(summaryChip(cell.label, scale[cell.key], ""));
-      }
-    });
-  }
-
-  // tone: "" for the plain cyan chip, "bad" for the danger colour.
-  function summaryChip(key, value, tone) {
-    var chip = span("runsummary__item" + (tone ? " runsummary__item--" + tone : ""), "");
-    chip.appendChild(span("runsummary__key", key));
-    chip.appendChild(span("runsummary__value", String(value)));
-    return chip;
-  }
-
   // The task's percent; kept at its last value once the run ends, 100 on success.
   function renderRunProgress(taskState, status) {
     if (taskState === "SUCCESS") {
@@ -1775,7 +1757,6 @@
     stopElapsedTicker();
     el.runElapsed.hidden = true;
     el.runElapsed.textContent = "";
-    el.runSummary.hidden = true;
     consoleCursor = null;
     el.console.textContent = "";
     el.console.appendChild(
@@ -1945,18 +1926,19 @@
   }
 
   // The counts the file's metadata carries. The model card lays them out
-  // in two rows: Applications and Libraries on top, Nodes, Topics and
-  // Messages below.
+  // in two rows of three: Nodes, Applications and Topics on top, Networks,
+  // Libraries and Messages below.
   var SCALE_CELLS = [
+    { key: "nodes", label: "Nodes" },
     { key: "apps", label: "Applications" },
     { key: "topics", label: "Topics" },
-    { key: "nodes", label: "Nodes" },
+    { key: "networks", label: "Networks" },
     { key: "libraries", label: "Libraries" },
     { key: "messages", label: "Messages" }
   ];
   var SCALE_ROWS = [
-    { cls: "scale__row--two", keys: ["apps", "libraries"] },
-    { cls: "scale__row--three", keys: ["nodes", "topics", "messages"] }
+    { cls: "scale__row--three", keys: ["nodes", "apps", "topics"] },
+    { cls: "scale__row--three", keys: ["networks", "libraries", "messages"] }
   ];
   var cellByKey = {};
   SCALE_CELLS.forEach(function (cell) {
@@ -2048,8 +2030,9 @@
    * (SRS DSM-DVE req 43). The model is fetched once (req 8), shared with the
    * model card, and redrawn only when another file takes the card. */
 
-  // The model the tree on screen was drawn from.
+  // The model the picture on screen was drawn from, and in which mode.
   var graphModel = null;
+  var graphDrawnMode = null;
 
   function enterGraph() {
     setMessage("graph", null, "");
@@ -2091,17 +2074,24 @@
       generated: el.graphGenerated
     });
     el.graphLegend.hidden = false;
-    if (graphModel === model) {
+    renderGraphMode();
+    if (graphModel === model && graphDrawnMode === state.graphMode) {
       // Back on the card: the canvas may have been hidden while the window changed.
       DsmHierarchyGraph.resize();
       return;
     }
+    var graph = model.graph || {};
+    if (state.graphMode === "hw" && !(graph.nodes || []).length && !(graph.networks || []).length) {
+      setMessage("graph", "error", "This model has no nodes or networks to draw.");
+    }
     el.graphLoading.hidden = false;
     // The canvas has its size only once the card is shown; let that settle.
     setTimeout(function () {
-      DsmHierarchyGraph.load(model)
+      var drawing = state.graphMode;
+      DsmHierarchyGraph.load(model, drawing)
         .then(function () {
           graphModel = model;
+          graphDrawnMode = drawing;
           el.graphLoading.hidden = true;
         })
         .catch(function (error) {
@@ -2111,10 +2101,67 @@
     }, 30);
   }
 
+  // The title, chips and legend follow the mode.
+  function renderGraphMode() {
+    renderGraphTitle();
+    el.graphSearch.setAttribute("data-mode", state.graphMode);
+    el.graphLegend.setAttribute("data-mode", state.graphMode);
+  }
+
+  // The stage's title is the mode switch: both pictures' names, the one on
+  // show bright and the other dimmed, each a button. Built with DOM calls,
+  // as the header otherwise sets text only.
+  function renderGraphTitle() {
+    renderHeader({ title: "" });
+    // An empty title falls back to the product's name; the switch takes its place.
+    el.title.textContent = "";
+    var group = document.createElement("span");
+    group.className = "title__toggle";
+    group.setAttribute("role", "group");
+    group.setAttribute("aria-label", "View mode");
+    ["sw", "hw"].forEach(function (mode, i) {
+      if (i) {
+        var dot = document.createElement("span");
+        dot.className = "title__dot";
+        dot.setAttribute("aria-hidden", "true");
+        // Swap arrows: the two words trade places.
+        dot.textContent = "\u21c4";
+        group.appendChild(dot);
+      }
+      var on = mode === state.graphMode;
+      var option = document.createElement("button");
+      option.type = "button";
+      option.className = "title__option";
+      option.setAttribute("data-mode", mode);
+      option.setAttribute("aria-pressed", on ? "true" : "false");
+      option.title = on ? GRAPH_TITLES[mode] + " view, on show" : "Show the " + GRAPH_TITLES[mode].toLowerCase() + " view";
+      option.textContent = GRAPH_TITLES[mode];
+      group.appendChild(option);
+    });
+    el.title.appendChild(group);
+  }
+
   function wireGraph() {
     DsmHierarchyGraph.mount(el.graphCanvas, el.graphSearch);
     // The model card's way on to the view step (req 43).
     el.modelView.addEventListener("click", enterGraph);
+    // The title's dimmed word redraws the loaded model as that picture.
+    el.title.addEventListener("click", function (event) {
+      var option = event.target.closest ? event.target.closest(".title__option") : null;
+      var mode = option && option.getAttribute("data-mode");
+      // No change while a picture is still being drawn: two renders would overlap.
+      if (!mode || mode === state.graphMode || state.view !== "graph" || !el.graphLoading.hidden) {
+        return;
+      }
+      state.graphMode = mode;
+      saveUserState();
+      setMessage("graph", null, "");
+      if (graphModel) {
+        renderGraph(graphModel);
+      } else {
+        renderGraphMode();
+      }
+    });
   }
 
   function modelRow(host) {

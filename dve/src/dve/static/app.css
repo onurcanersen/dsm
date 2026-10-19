@@ -57,6 +57,8 @@
   --w-form: min(392px, 100%);
   --w-list: min(480px, 100%);
   --w-full: min(1180px, 100%);
+  /* The run deck's console column: the left half, leaving the ship on the background clear. */
+  --w-run: min(600px, 52%);
   --r-card: 14px;
   --r-panel: 8px;
   --r-control: 6px;
@@ -104,6 +106,20 @@ body {
   background-position: center;
   background-repeat: no-repeat;
   background-attachment: fixed;
+  /* The run deck's ship bleeds past the right edge; clipped, not scrolled. */
+  overflow-x: clip;
+}
+
+/* The run deck alone sits on the open sea: the ship stands beside its
+   console as an image of its own (bg-sea-blur.jpeg is bg-sea.jpeg blurred
+   the same way as bg-blur.jpeg). */
+body.body--run {
+  background-image: url("img/bg-sea.jpeg");
+}
+
+body.body--run .card__blur::before,
+body.body--run .mpanel__blur::before {
+  background-image: url("img/bg-sea-blur.jpeg");
 }
 
 /* The hidden attribute wins over any display the rules below set. */
@@ -496,28 +512,6 @@ html::-webkit-scrollbar-corner,
   }
 }
 
-/* The run panel's frame keeps the run's outcome colour once it has ended. */
-.runpanel {
-  transition: border-color var(--t), box-shadow var(--t);
-}
-
-.runpanel[data-outcome="ok"] {
-  border-color: var(--ok);
-  box-shadow: var(--glow-ok), inset 0 0 60px rgba(53, 224, 127, 0.14);
-}
-
-.runpanel[data-outcome="bad"] {
-  border-color: var(--danger);
-  box-shadow: var(--glow-danger), inset 0 0 60px rgba(255, 107, 122, 0.14);
-}
-
-/* The cyan corner brackets stand down once the frame wears an outcome. */
-.runpanel[data-outcome]::before,
-.runpanel[data-outcome]::after,
-.runpanel[data-outcome] .mpanel__corners {
-  display: none;
-}
-
 /* The frame shared by a stage card and each panel of the model deck. */
 .card,
 .mpanel {
@@ -726,6 +720,49 @@ html::-webkit-scrollbar-corner,
   flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
+}
+
+/* The run and model decks' headers read from the left edge: the title, the
+   context line under it, and the actions on the title's own line at the right. */
+.shell--run .title,
+.shell--model .title {
+  text-align: left;
+}
+
+.shell--run .context,
+.shell--model .context {
+  justify-content: flex-start;
+}
+
+/* The actions rise out of the view onto the title's line: a box as tall as
+   that line, the buttons centred on it. */
+.shell--run .run__actions,
+.shell--model .model__actions {
+  top: calc(-1 * var(--fs-title) * 1.3);
+  height: calc(var(--fs-title) * 1.3);
+}
+
+/* The run panel takes the left half of the deck; the ship on the background
+   keeps the right. The message under it follows its edge. */
+.shell--run .runpanel,
+.shell--run #run-message {
+  box-sizing: border-box;
+  width: var(--w-run);
+  align-self: flex-start;
+}
+
+/* The ship fills the right of the deck, level with the console; it is
+   decoration and takes no clicks. */
+.run__ship {
+  position: absolute;
+  top: 50%;
+  right: -160px;
+  z-index: 0;
+  width: calc(100% - var(--w-run) + 150px);
+  transform: translateY(-50%);
+  filter: drop-shadow(0 0 24px rgba(34, 230, 245, 0.25));
+  pointer-events: none;
+  user-select: none;
 }
 
 .field {
@@ -1253,39 +1290,6 @@ html::-webkit-scrollbar-corner,
   color: var(--ok);
 }
 
-/* The run summary's chips: a muted key and a cyan value in a pill. */
-.runsummary__item {
-  display: flex;
-  align-items: baseline;
-  gap: 7px;
-  min-width: 0;
-  max-width: 100%;
-  padding: 4px 10px;
-  box-sizing: border-box;
-  border: 1px solid var(--line);
-  border-radius: var(--r-pill);
-  background-color: var(--tint-cyan);
-  font-size: var(--fs-value);
-  line-height: 1.3;
-  letter-spacing: var(--ls-text);
-  white-space: nowrap;
-  color: var(--cyan);
-}
-
-.runsummary__key {
-  flex: none;
-  font-size: var(--fs-label);
-  letter-spacing: var(--ls-label);
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.runsummary__value {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 /* ------------------------------------------------ list primitives */
 
 /* Every list on the page is the same object: a bordered box, a bar naming it, a stack of rows. */
@@ -1738,101 +1742,45 @@ html::-webkit-scrollbar-corner,
 /* ------------------------------------------------ run card */
 
 /* State bar over the console, in one panel that fills the card: the card's
-   frame is its only frame, so it clips itself to the card's rounding (req 6). */
-/* The panel's parts sit over its frosted backdrop; the bar rounds with the frame. */
+   frame is its only frame, so it clips itself to the card's rounding (req 6).
+   The bar is a model panel's bar: the same height, glyph and label size, the
+   state where the panel's name goes and the figures in the count's slot.
+   The panel's parts sit over its frosted backdrop; the bar rounds with the frame. */
 .runpanel__bar,
-.shell--run .console,
-.runpanel__foot {
+.shell--run .console {
   position: relative;
   z-index: 1;
 }
 
 .runpanel__bar {
+  flex: none;
+  flex-wrap: nowrap;
   border-radius: calc(var(--r-card) - 2px) calc(var(--r-card) - 2px) 0 0;
-}
-
-.runpanel__bar,
-.shell--run .console {
-  padding-left: 20px;
-  padding-right: 20px;
-}
-
-.runpanel__bar {
-  position: relative;
-  flex-wrap: wrap;
-  gap: 6px 10px;
-  min-height: 46px;
-  padding-top: 14px;
-  padding-bottom: 14px;
   overflow: hidden;
 }
 
-/* Floating over the console's bottom edge: the message at the left, the action
-   at the right; the console keeps room for them under its last lines. */
-.runpanel__foot {
-  position: absolute;
-  right: 20px;
-  bottom: 14px;
-  left: 20px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  pointer-events: none;
+/* The actions hang in the header's right margin as on the model card. */
+#view-run {
+  position: relative;
 }
 
-.runpanel__foot .message,
-.runpanel__foot .runsummary,
-.runpanel__foot .actions {
-  pointer-events: auto;
-}
-
-/* The run's outcome as chips, in the message's slot. */
-.runsummary {
-  display: flex;
-  flex: 0 1 auto;
-  flex-wrap: wrap;
-  gap: 6px 8px;
-}
-
-.runsummary__item {
-  background-color: rgba(2, 14, 20, 0.85);
-}
-
-.runsummary__item--bad {
-  border-color: var(--danger-dim);
-  color: var(--danger);
-}
-
-.runpanel__foot .message {
-  flex: 0 1 auto;
-  margin: 0;
-  background-color: rgba(2, 14, 20, 0.85);
-}
-
-.runpanel__foot .actions,
-.runpanel__foot .message:not(:empty) + .actions {
-  flex: none;
-  flex-direction: row;
-  margin-top: 0;
-  margin-left: auto;
-}
-
-.runpanel__foot .submit {
-  width: auto;
-  padding: 10px 18px;
-}
-
-/* The run's elapsed time, at the bar's far end. */
+/* The run's percent and elapsed time at the bar's far end, set like a
+   panel's count; whichever shows first takes the gap. */
+.runpanel__percent,
 .runpanel__elapsed {
-  margin-left: auto;
-  font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  flex: none;
+  font-family: Barlow, sans-serif;
   font-size: var(--fs-info);
+  font-weight: 400;
   letter-spacing: var(--ls-text);
+  white-space: nowrap;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
-.runpanel__elapsed[hidden] ~ .runpanel__stop {
+.runpanel__percent:not([hidden]),
+.runpanel__percent[hidden] + .runpanel__elapsed,
+.runpanel__percent[hidden] + .runpanel__elapsed[hidden] + .runpanel__stop {
   margin-left: auto;
 }
 
@@ -1878,16 +1826,18 @@ html::-webkit-scrollbar-corner,
 
 .runpanel__rocket {
   flex: none;
-  font-size: var(--icon-lg);
+  font-size: var(--icon-sm);
   line-height: 1;
   color: var(--muted);
 }
 
+/* The state in the micro-label (see .mpanel__bar), muted until the run has a tone. */
 .runpanel__value {
   white-space: nowrap;
   font-family: Orbitron, Barlow, sans-serif;
-  font-size: var(--fs-control);
+  font-size: var(--fs-label);
   font-weight: 600;
+  line-height: 1.2;
   letter-spacing: var(--ls-label);
   text-transform: uppercase;
   color: var(--muted);
@@ -1911,13 +1861,8 @@ html::-webkit-scrollbar-corner,
   position: relative;
 }
 
-.runpanel__percent {
-  font-family: Orbitron, Barlow, sans-serif;
-  font-size: var(--fs-info);
-  font-weight: 600;
-  letter-spacing: var(--ls-label);
+.runpanel[data-tone="busy"] .runpanel__percent {
   color: var(--cyan);
-  font-variant-numeric: tabular-nums;
 }
 
 /* The bar's rule and glyphs take the run's tone. */
@@ -1933,7 +1878,6 @@ html::-webkit-scrollbar-corner,
 
 .runpanel[data-tone="busy"] .runpanel__rocket {
   color: var(--cyan);
-  text-shadow: 0 0 8px rgba(34, 230, 245, 0.9);
 }
 
 .runpanel[data-tone="busy"] .runpanel__value {
@@ -1944,14 +1888,9 @@ html::-webkit-scrollbar-corner,
   border-bottom-color: var(--ok-dim);
 }
 
-.runpanel[data-tone="ok"] .runpanel__rocket {
-  color: var(--ok);
-  text-shadow: 0 0 8px rgba(53, 224, 127, 0.9);
-}
-
+.runpanel[data-tone="ok"] .runpanel__rocket,
 .runpanel[data-tone="ok"] .runpanel__value {
   color: var(--ok);
-  text-shadow: 0 0 14px rgba(53, 224, 127, 0.55);
 }
 
 .runpanel[data-tone="ok"] .runpanel__percent {
@@ -1966,14 +1905,9 @@ html::-webkit-scrollbar-corner,
   border-bottom-color: var(--danger-dim);
 }
 
-.runpanel[data-tone="bad"] .runpanel__rocket {
-  color: var(--danger);
-  text-shadow: 0 0 8px rgba(255, 107, 122, 0.8);
-}
-
+.runpanel[data-tone="bad"] .runpanel__rocket,
 .runpanel[data-tone="bad"] .runpanel__value {
   color: var(--danger);
-  text-shadow: 0 0 14px rgba(255, 107, 122, 0.5);
 }
 
 .runpanel[data-tone="bad"] .runpanel__percent {
@@ -2008,18 +1942,16 @@ html::-webkit-scrollbar-corner,
   color: var(--ink);
 }
 
-/* On the run view the console takes what the bar and the actions leave. */
+/* On the run view the console takes what the bar leaves. */
 .shell--run .console {
   height: auto;
   flex: 1 1 auto;
   min-height: 140px;
-  padding-bottom: 68px;
 }
 
-/* The context line keeps its height; only the console gives up room. */
+/* The context line and the message keep their height; only the console gives up room. */
 .shell--run .context,
-.shell--run .runpanel__bar,
-.shell--run .runpanel__foot {
+.shell--run #run-message {
   flex: none;
 }
 
@@ -2029,7 +1961,9 @@ html::-webkit-scrollbar-corner,
   justify-content: center;
 }
 
-/* One log line as three columns: clock, level, message. The level column holds CRITICAL at its smaller size and spacing. */
+/* One log line as three columns: clock, level, message: the clock muted,
+   the level in its severity's colour (cyan, amber, red), the message in
+   ink. The level column holds CRITICAL at its size. */
 .console__line {
   display: grid;
   contain: layout style;
@@ -2062,6 +1996,7 @@ html::-webkit-scrollbar-corner,
 
 .console__text {
   min-width: 0;
+  color: var(--ink);
 }
 
 .console__level[data-level="INFO"] {
@@ -2244,10 +2179,6 @@ html::-webkit-scrollbar-corner,
   gap: 1px;
 }
 
-.scale__row--two {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
 .scale__row--three {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -2330,6 +2261,22 @@ html::-webkit-scrollbar-corner,
 @media (max-width: 860px) {
   .model__grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* No room for a half column: the run panel spans the deck again. */
+  .shell--run .runpanel,
+  .shell--run #run-message {
+    width: 100%;
+  }
+
+  .run__ship {
+    display: none;
+  }
+
+  /* Back in the flow with the other decks' actions, at the buttons' own height. */
+  .shell--run .run__actions,
+  .shell--model .model__actions {
+    height: auto;
   }
 
   .shell--model .model__grid,
@@ -2442,6 +2389,54 @@ body.body--graph {
   margin: -10px -6px;
 }
 
+/* On the graph stage the title is the mode switch: both pictures' names,
+   the one on show bright, the other dimmed until hovered, each a button. */
+.title__toggle {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.title__option {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: rgba(223, 238, 242, 0.42);
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  /* Inked in like the context line under it, whichever word is on show. */
+  text-shadow: var(--ink-shadow);
+  cursor: pointer;
+  transition: color var(--t);
+}
+
+/* Hovered like the page's other text controls (.linkbtn, .reveal, the chips). */
+.title__option:hover {
+  color: var(--cyan);
+}
+
+.title__option[aria-pressed="true"] {
+  color: #ffffff;
+  cursor: default;
+}
+
+/* The swap arrows between the words, from Barlow since Orbitron has none. */
+.title__dot {
+  font-family: Barlow, sans-serif;
+  font-size: 0.85em;
+  color: rgba(34, 230, 245, 0.7);
+}
+
+/* The chips and legend items of the other mode stay out of sight. */
+.gsearch[data-mode="hw"] [data-mode="sw"],
+.gsearch[data-mode="sw"] [data-mode="hw"],
+.glegend[data-mode="hw"] [data-mode="sw"],
+.glegend[data-mode="sw"] [data-mode="hw"] {
+  display: none;
+}
+
 /* The legend, one line along the stage's bottom edge: the glyphs with
    their names, then how to move the picture (req 43). Inked in like the
    title so it holds over the tree. */
@@ -2519,6 +2514,25 @@ body.body--graph {
 
 .glegend__mark + .glegend__mark {
   margin-left: -4px;
+}
+
+/* The hardware view's lines in the legend as they are drawn: a network is
+   a horizontal line, a link a vertical one. */
+.glegend__swatch {
+  flex: none;
+  display: inline-block;
+  background: var(--cyan);
+  box-shadow: 0 0 6px rgba(34, 230, 245, 0.6);
+}
+
+.glegend__swatch--bus {
+  width: 18px;
+  height: 2px;
+}
+
+.glegend__swatch--link {
+  width: 2px;
+  height: 12px;
 }
 
 /* The search panel (req 43) in the stage's top right corner: a field,
@@ -2816,7 +2830,10 @@ body.body--graph {
 }
 
 .graph__canvas {
-  position: absolute;
+  /* G6 makes its container position: relative inline, which would leave the
+     stage's size to the canvas drawn last: a second picture would then
+     measure a collapsed container. The frame keeps the stage's size. */
+  position: absolute !important;
   inset: 0;
   /* G6 isolates its container inline, which would trap the hover cards'
      z-index under the fixed title and context line; its own children sit at
@@ -2829,6 +2846,130 @@ body.body--graph {
   position: absolute;
   inset: 0;
   z-index: 3;
+}
+
+/* ------------------------------------------------ buses */
+
+/* A network of the hardware view (a G6 HTML node): its name over the left
+   end of the glowing line that runs across the stage. The node is
+   transparent, so the lines drawn under it show. */
+.bus {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  color: #ffffff;
+  font-family: Barlow, sans-serif;
+  user-select: none;
+  /* Only the label and the line take the pointer: the lines drawn under the
+     rest of the node stay hoverable. */
+  pointer-events: none;
+}
+
+.bus__label,
+.bus__line {
+  pointer-events: auto;
+}
+
+/* The name over the line's left end, its node count and fold toggle beside it. */
+.bus__label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  max-width: 100%;
+  text-shadow: var(--ink-shadow);
+  cursor: pointer;
+}
+
+/* How many nodes the bus carries, and the fold toggle after it. */
+.bus__count {
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: rgba(223, 238, 242, 0.55);
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+.bus__toggle {
+  font-size: 12px;
+  color: var(--cyan);
+  text-shadow: 0 0 6px rgba(34, 230, 245, 0.5);
+}
+
+.bus__label:hover .bus__name {
+  color: var(--cyan);
+}
+
+.bus__name {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  line-height: 1.15;
+  color: #ffffff;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+/* A 10px band to hover, with the 2px line drawn through its middle. */
+.bus__line {
+  position: absolute;
+  right: 0;
+  height: 10px;
+}
+
+.bus__line::before {
+  content: "";
+  position: absolute;
+  top: 4px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--cyan);
+  box-shadow: 0 0 8px rgba(34, 230, 245, 0.6), 0 0 2px rgba(34, 230, 245, 0.9);
+  transition: background-color var(--t), box-shadow var(--t);
+}
+
+/* A network nothing joins: a dashed, dimmer line. */
+.bus--empty .bus__line::before {
+  background: repeating-linear-gradient(90deg, rgba(34, 230, 245, 0.55) 0 6px, transparent 6px 11px);
+  box-shadow: none;
+}
+
+/* A cluster label over a group's first card in the hardware grid (its own
+   HTML node): a muted uppercase micro-label, inked in like the title. */
+.glabel {
+  font-family: Barlow, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 16px;
+  color: rgba(205, 240, 248, 0.8);
+  white-space: nowrap;
+  text-shadow: var(--ink-shadow);
+  text-transform: uppercase;
+  user-select: none;
+}
+
+.bus--active .bus__line::before {
+  height: 3px;
+  background: #ffffff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.8), 0 0 3px #ffffff;
+}
+
+.bus--active .bus__name {
+  color: #ffffff;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+}
+
+.bus--highlight .bus__line::before {
+  background: var(--mark);
+  box-shadow: 0 0 10px var(--mark-dim), 0 0 3px var(--mark);
+}
+
+.bus--highlight .bus__name {
+  color: var(--mark);
 }
 
 /* ------------------------------------------------ boxes */
@@ -2979,9 +3120,19 @@ body.body--graph {
   text-overflow: ellipsis;
 }
 
+/* Under the pointer (and its neighbours): a white frame over a lighter
+   fill, apart from the cyan rest state and the find's gold. */
 .box--active {
-  border-color: #7df3ff;
-  box-shadow: 0 0 16px rgba(34, 230, 245, 0.65), 0 0 2px #7df3ff, inset 0 0 14px rgba(34, 230, 245, 0.22);
+  border-color: #ffffff;
+  background-color: rgba(34, 230, 245, 0.22);
+  background-image: linear-gradient(180deg, rgba(190, 250, 255, 0.3), rgba(20, 90, 115, 0.5));
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.45), 0 0 2px #ffffff, inset 0 0 14px rgba(34, 230, 245, 0.3);
+}
+
+.box--active .box__glyph,
+.box--active .box__toggle {
+  color: #ffffff;
+  text-shadow: 0 0 6px rgba(255, 255, 255, 0.7);
 }
 
 /* The box the search landed on (req 43): the find's gold frame and glow
@@ -3105,6 +3256,7 @@ body.body--graph {
 .source__tile:focus-visible,
 .filerow:focus-visible,
 .stepper__button:focus-visible,
+.title__option:focus-visible,
 .linkbtn:focus-visible,
 .reveal:focus-visible,
 .console:focus-visible,

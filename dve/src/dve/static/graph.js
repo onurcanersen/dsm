@@ -1,7 +1,9 @@
-/* The system hierarchy of a Model Setup Data file as a vendored AntV G6 tree,
- * CSMS > CSS > CSCI > CSC > CSU with one relation card per CSU (SRS DSM-SMM
- * req 6, 7). app.js drives it through window.DsmHierarchyGraph; the search
- * panel finds, opens, centres and lights a box or row (SRS DSM-DVE req 43). */
+/* The two pictures of a Model Setup Data file on a vendored AntV G6 canvas:
+ * the software view, a tree CSMS > CSS > CSCI > CSC > CSU with one relation
+ * card per CSU (SRS DSM-SMM req 6, 7), and the hardware view, the networks
+ * as bus lines with their nodes beneath. app.js drives both through
+ * window.DsmHierarchyGraph; the search panel finds, opens, centres and
+ * lights a box, row or bus (SRS DSM-DVE req 43). */
 (function () {
   "use strict";
 
@@ -48,7 +50,7 @@
     { key: "uses", label: "USES", kind: "lib", list: "libraries" }
   ];
 
-  var KIND_NAMES = { app: "CSU", node: "Node", topic: "Topic", message: "Message", lib: "Library" };
+  var KIND_NAMES = { app: "CSU", node: "Node", topic: "Topic", message: "Message", lib: "Library", network: "Network" };
 
   // el.graph is the container app.js hands over; el.rowTip the hover card of the rows.
   var el = {};
@@ -63,6 +65,11 @@
   // Expansions queue on this promise, since G6 drops an expandElement call
   // while another is in flight.
   var pending = Promise.resolve();
+  // Which picture is drawn: "sw" the system hierarchy tree, "hw" the
+  // networks with their nodes (see the hardware section).
+  var mode = "sw";
+  // The hardware view's open buses by id: the grid shows the cards on them.
+  var openBuses = {};
 
   /* ---------------------------------------------------------------- tree */
 
@@ -237,6 +244,273 @@
     return { data: data, copies: copies, entities: entities, parents: parents, labels: labels, index: entries };
   }
 
+  /* ------------------------------------------------------------ hardware */
+
+  /* The hardware view: every network a horizontal bus line, one under the
+   * other, each with a [+]/[-] toggle. The cards on the open buses form a
+   * grid above the lines, left to right in group order, as many to a row as
+   * the stage is wide, each group opening under a cluster label, and from
+   * each card one straight tap down to every open bus it is on (the port
+   * names stay in the hover card). Each node is drawn once. Positions are
+   * computed here, so the graph runs with no layout. */
+
+  var CONTENT_X = 24; // from the lines' start to the first card
+  var LABEL_H = 20; // the cluster label's room above a group's first card
+  var WRAP_GAP = 44; // between rows of cards, room for a cluster label
+  var GRID_GAP = 56; // under the last row of cards, before the first bus
+  var LINE_Y = 24; // the line's offset from the top of the bus node; the name sits above it
+  var BUS_PITCH = 52; // from one bus line to the next
+  var END_PAD = 40; // the lines' run past the last card
+  var MIN_RUN = 160; // the shortest line
+  // The lines are drawn across the visible stage, this far in from its
+  // sides, whatever the zoom or pan (stretchLines); lineSpan holds the
+  // current span in canvas units for the bus markup.
+  var VIEW_MARGIN = 24;
+  var lineSpan = null;
+
+  function hardwareIndex(msd) {
+    var g = msd.graph || {};
+    var nodes = indexById(g.nodes);
+    var networks = indexById(g.networks);
+    var relationships = g.relationships || {};
+    var members = {};
+    var homes = {};
+    var units = {};
+    (relationships.connects_to || []).forEach(function (link) {
+      // A node on a network, as the writer emits it; anything else is skipped.
+      if (nodes[link.from] && networks[link.to]) {
+        (members[link.to] || (members[link.to] = [])).push({ node: link.from, device: link.device, dev_raw: link.dev_raw });
+        (homes[link.from] || (homes[link.from] = [])).push({ network: link.to, device: link.device, dev_raw: link.dev_raw });
+      }
+    });
+    (relationships.runs_on || []).forEach(function (edge) {
+      units[edge.to] = (units[edge.to] || 0) + 1;
+    });
+    return { nodes: nodes, networks: networks, members: members, homes: homes, units: units };
+  }
+
+  function groupOf(node) {
+    var group = (node || {}).group;
+    return !group || group === MISSING ? "" : String(group);
+  }
+
+  // A node's tap in words: the network's name, and the device in brackets when known.
+  function linkLabel(link) {
+    return link.name + (link.device && link.device !== MISSING ? " (" + link.device + ")" : "");
+  }
+
+  // A node's search entry; its path lists the networks it taps.
+  function nodeEntry(nodeId, node, links) {
+    return {
+      type: "node",
+      tag: "Node",
+      glyph: GLYPHS.node,
+      id: nodeId,
+      label: String(node.name),
+      text: String(node.name).toLowerCase(),
+      path: links.map(linkLabel).join(" \u00b7 ")
+    };
+  }
+
+  // The buses top to bottom: the fullest first (the shortest taps), the
+  // empty ones last, names breaking ties.
+  function orderBuses(index) {
+    return Object.keys(index.networks).sort(function (a, b) {
+      return (index.members[b] || []).length - (index.members[a] || []).length || compareText(index.networks[a].name, index.networks[b].name);
+    });
+  }
+
+  // The bus open when the picture is first drawn: the first one with nodes.
+  function defaultOpen(msd) {
+    var index = hardwareIndex(msd);
+    var first = orderBuses(index)[0];
+    var open = {};
+    if (first && (index.members[first] || []).length) {
+      open[first] = true;
+    }
+    return open;
+  }
+
+  // The hardware picture as G6 graph data with positions set (see above),
+  // showing the cards on the buses in `open`.
+  function buildHardware(msd, open) {
+    var index = hardwareIndex(msd);
+    var labels = {};
+    var entries = [];
+    var nodes = [];
+    var edges = [];
+    open = open || {};
+
+    // The cards on an open bus, in group order and by name within a group.
+    var cardIds = Object.keys(index.nodes)
+      .filter(function (id) {
+        return (index.homes[id] || []).some(function (link) {
+          return open[link.network];
+        });
+      })
+      .sort(function (a, b) {
+        return compareText(groupOf(index.nodes[a]), groupOf(index.nodes[b])) || compareText(index.nodes[a].name, index.nodes[b].name);
+      });
+    var busIds = orderBuses(index);
+
+    // A tap with its network's name in place of the id.
+    function namedLink(link) {
+      return { name: (index.networks[link.network] || {}).name || link.network, device: link.device, dev_raw: link.dev_raw };
+    }
+
+    // One port per tap on each bus: { key, ax }.
+    var busPorts = {};
+    busIds.forEach(function (id) {
+      busPorts[id] = [];
+    });
+
+    // The lines' content run: the stage's width at zoom 1, at least MIN_RUN;
+    // a row of cards also ends where it would pass the run's end.
+    var run = Math.max(MIN_RUN, (el.graph ? el.graph.clientWidth : 0) - PADDING_HW[1] - PADDING_HW[3]);
+    var wrapRight = run - END_PAD;
+
+    var x = CONTENT_X;
+    var right = CONTENT_X;
+    var cardTop = LABEL_H;
+    var inRow = 0;
+    var lastGroup = null;
+    cardIds.forEach(function (nodeId) {
+      var node = index.nodes[nodeId];
+      // Its taps: to the open buses only.
+      var links = (index.homes[nodeId] || [])
+        .filter(function (link) {
+          return open[link.network];
+        })
+        .sort(function (a, b) {
+          return busIds.indexOf(a.network) - busIds.indexOf(b.network);
+        });
+      var datum = {
+        id: nodeId,
+        data: {
+          level: "node",
+          tag: "Node",
+          kind: "node",
+          ref: nodeId,
+          label: node.name,
+          attrs: node,
+          units: index.units[nodeId] || 0,
+          networks: links.map(namedLink),
+          ports: links.map(function (link, i) {
+            return { key: "tap" + i, placement: [(i + 1) / (links.length + 1), 1] };
+          })
+        }
+      };
+      var width = widthOf(datum);
+      if (inRow > 0 && x + width > wrapRight) {
+        inRow = 0;
+        x = CONTENT_X;
+        cardTop += BOX_HEIGHT + WRAP_GAP;
+      }
+      inRow += 1;
+      var group = groupOf(node);
+      if (group !== lastGroup) {
+        // The cluster label over the group's first card.
+        lastGroup = group;
+        var text = group || "ungrouped";
+        var labelW = Math.ceil(textWidth("sub", text.toUpperCase()) + 8);
+        nodes.push({
+          id: "glabel:" + nodeId,
+          data: { level: "glabel", label: text, w: labelW, h: LABEL_H - 4 },
+          style: { x: x + labelW / 2, y: cardTop - LABEL_H / 2 - 2 }
+        });
+      }
+      datum.style = { x: x + width / 2, y: cardTop + BOX_HEIGHT / 2 };
+      nodes.push(datum);
+      links.forEach(function (link, i) {
+        var ax = x + width * ((i + 1) / (links.length + 1));
+        var key = "tap:" + nodeId + ":" + i;
+        busPorts[link.network].push({ key: key, ax: ax });
+        edges.push({
+          id: key,
+          source: nodeId,
+          target: link.network,
+          data: {
+            edge: "tap",
+            sourcePort: "tap" + i,
+            targetPort: key,
+            device: link.device,
+            dev_raw: link.dev_raw,
+            from: node.name,
+            to: (index.networks[link.network] || {}).name
+          }
+        });
+      });
+      x += width + H_GAP;
+      right = Math.max(right, x - H_GAP);
+      labels[nodeId] = node.name;
+      entries.push(nodeEntry(nodeId, node, datum.data.networks));
+    });
+
+    // Every node is findable, shown or not: the search opens its buses.
+    Object.keys(index.nodes).forEach(function (nodeId) {
+      if (cardIds.indexOf(nodeId) !== -1) {
+        return;
+      }
+      var node = index.nodes[nodeId];
+      labels[nodeId] = node.name;
+      entries.push(nodeEntry(nodeId, node, (index.homes[nodeId] || []).map(namedLink)));
+    });
+
+    // The buses under the grid, one line under the other, each the content
+    // run long: the stage's width less its side paddings, so the lines keep
+    // clear of both edges.
+    run = Math.max(run, right + END_PAD);
+    var busW = run;
+    var busH = LINE_Y + 12;
+    var busTop = cardIds.length ? cardTop + BOX_HEIGHT + GRID_GAP : 0;
+    busIds.forEach(function (busId) {
+      var network = index.networks[busId];
+      var count = (index.members[busId] || []).length;
+      nodes.push({
+        id: busId,
+        data: {
+          level: "bus",
+          tag: "Network",
+          kind: "network",
+          label: network.name,
+          attrs: network,
+          empty: !count,
+          open: !!open[busId],
+          w: busW,
+          h: busH,
+          run: run,
+          lineY: LINE_Y,
+          count: count,
+          ports: busPorts[busId].map(function (port) {
+            return { key: port.key, placement: [port.ax / busW, LINE_Y / busH] };
+          })
+        },
+        style: { x: run / 2, y: busTop + busH / 2 }
+      });
+      labels[busId] = network.name;
+      entries.push({
+        type: "network",
+        tag: "Network",
+        glyph: GLYPHS.bus,
+        id: busId,
+        label: String(network.name),
+        text: String(network.name).toLowerCase(),
+        path: shown(network.purpose)
+      });
+      busTop += BUS_PITCH;
+    });
+
+    return {
+      data: { nodes: nodes, edges: edges },
+      copies: {},
+      entities: { node: index.nodes, network: index.networks },
+      homes: index.homes,
+      parents: {},
+      labels: labels,
+      index: entries
+    };
+  }
+
   /* -------------------------------------------------------------- styling */
 
   /* Every box is the same card: a glyph on the left, a title over a muted
@@ -263,7 +537,8 @@
     node: "lucide-server",
     topic: "lucide-radio",
     message: "lucide-mail",
-    lib: "lucide-library"
+    lib: "lucide-library",
+    bus: "lucide-network"
   };
 
   var GROUP_SUBTITLES = { "RUNS ON": "Nodes", "PUB TO": "Topics", "SUB TO": "Topics", SENDS: "Messages", RECEIVES: "Messages", USES: "Libraries" };
@@ -297,6 +572,10 @@
         return (data.tag || "DSM") + " · " + plural(childCount(datum), CHILD_NAMES[data.level]);
       case "csu":
         return "CSU · v" + shown(attrs.version);
+      case "node":
+        // The group and how many software units run on the node; the
+        // hardware stays in the hover card.
+        return shown(attrs.group) + " · " + plural(data.units || 0, "CSU");
       case "group":
         return (GROUP_SUBTITLES[data.label] || "Relation") + " · " + data.count;
       default:
@@ -318,6 +597,9 @@
   // A relation card is the header plus up to LIST_CAP rows; the rest scroll.
   function heightOf(datum) {
     var data = datum.data || {};
+    if (data.level === "bus" || data.level === "glabel") {
+      return data.h;
+    }
     if (data.level !== "group") {
       return BOX_HEIGHT;
     }
@@ -379,6 +661,9 @@
 
   function widthOf(datum) {
     var data = datum.data || {};
+    if (data.level === "bus" || data.level === "glabel") {
+      return data.w;
+    }
     var lines = Math.max(textWidth("title", titleOf(datum)), textWidth("sub", "[" + subtitleOf(datum) + "]"));
     var width = headExtra(datum) + lines;
     if (data.level === "group") {
@@ -448,6 +733,70 @@
     return '<div class="list' + (items.length > LIST_CAP ? " list--scroll" : "") + '">' + rows.join("") + "</div>";
   }
 
+  // A bus of the hardware view: the network's name over the left end of the
+  // line with its node count and fold toggle, and the line across the stage
+  // (the purpose stays in the hover card). The box modifiers become bus ones.
+  function busHtml(datum, modifier) {
+    var data = datum.data || {};
+    var classes = "bus" + (data.empty ? " bus--empty" : "") + (modifier ? " " + modifier.replace(/box--/g, "bus--") : "");
+    return (
+      '<div class="' + classes + '" data-id="' + escapeHtml(datum.id) + '">' +
+      '<div class="bus__label" style="height:' + (data.lineY - 4) + 'px">' +
+      '<span class="bus__name">' + escapeHtml(data.label) + "</span>" +
+      '<span class="bus__count">' + plural(data.count || 0, "node") + "</span>" +
+      (data.count ? '<span class="bus__toggle">[' + (data.open ? "\u2212" : "+") + "]</span>" : "") +
+      "</div>" +
+      '<div class="bus__line" style="' + lineStyle() + "top:" + (data.lineY - 5) + 'px"></div>' +
+      "</div>"
+    );
+  }
+
+  // Where a bus line runs, in the bus node's own units: the current span of
+  // the visible stage when known, the node's width otherwise.
+  function lineStyle() {
+    return lineSpan ? "left:" + lineSpan.left + "px;width:" + lineSpan.width + "px;right:auto;" : "left:0;";
+  }
+
+  // Stretches every bus line across the visible stage, VIEW_MARGIN in from
+  // each side, in place: the DOM lines now, and lineSpan for the next draw.
+  function stretchLines() {
+    if (!graph || mode !== "hw" || !el.graph) {
+      return;
+    }
+    var size = graph.getSize();
+    var left = graph.getCanvasByViewport([VIEW_MARGIN, 0])[0];
+    var right = graph.getCanvasByViewport([size[0] - VIEW_MARGIN, 0])[0];
+    lineSpan = { left: left, width: Math.max(0, right - left) };
+    Array.prototype.forEach.call(el.graph.querySelectorAll(".bus__line"), function (line) {
+      line.style.left = lineSpan.left + "px";
+      line.style.width = lineSpan.width + "px";
+      line.style.right = "auto";
+    });
+  }
+
+  var stretchQueued = false;
+
+  function queueStretch() {
+    if (stretchQueued) {
+      return;
+    }
+    stretchQueued = true;
+    requestAnimationFrame(function () {
+      stretchQueued = false;
+      stretchLines();
+    });
+  }
+
+  // A cluster label of the hardware view's grid: text alone, no states.
+  function labelHtml(datum) {
+    return '<div class="glabel">' + escapeHtml((datum.data || {}).label) + "</div>";
+  }
+
+  function htmlOf(datum, modifier) {
+    var level = (datum.data || {}).level;
+    return level === "bus" ? busHtml(datum, modifier) : level === "glabel" ? labelHtml(datum) : boxHtml(datum, modifier);
+  }
+
   function nodeStyle(datum) {
     var data = datum.data || {};
     var width = widthOf(datum);
@@ -458,16 +807,21 @@
       // so the layout's positions and the ports agree with the drawn card.
       dx: -width / 2,
       dy: -height / 2,
-      innerHTML: boxHtml(datum, ""),
+      innerHTML: htmlOf(datum, ""),
       label: false,
       port: false,
-      ports: [
+      // The hardware view sets each node's ports where its lines attach.
+      ports: data.ports || [
         { key: "in", placement: "top" },
         { key: "out", placement: "bottom" },
         { key: "left", placement: "left" },
         { key: "tail", placement: [TAIL / width, 1] }
       ],
-      cursor: hasChildren(datum) || data.ref ? "pointer" : "default"
+      cursor: data.level === "bus" || data.level === "glabel" ? "default" : hasChildren(datum) || data.ref ? "pointer" : "default",
+      // A bus is mostly empty space over the lines: only its label, line and
+      // cluster names take the pointer (see .bus in app.css); a cluster label
+      // takes none.
+      pointerEvents: data.level === "bus" || data.level === "glabel" ? "none" : "auto"
     };
   }
 
@@ -675,6 +1029,9 @@
   // at its height. The elbow is read from current positions on every draw,
   // since collapse-expand shifts positions after the layout.
   function edgeStyle(edge) {
+    if (mode === "hw") {
+      return hardwareEdgeStyle(edge);
+    }
     var source = graph.getNodeData(edge.source);
     var target = graph.getNodeData(edge.target);
     var level = ((target || {}).data || {}).level;
@@ -693,6 +1050,13 @@
       endArrowFill: COLOR.line,
       controlPoints: [[(sourceStyle.x || 0) - widthOf(source) / 2 + TAIL, targetStyle.y || 0]]
     };
+  }
+
+  // The taps of the hardware view run straight, port to port, from a card's
+  // foot down to a bus; the device name stays in the hover card.
+  function hardwareEdgeStyle(edge) {
+    var data = edge.data || {};
+    return { router: false, sourcePort: data.sourcePort, targetPort: data.targetPort };
   }
 
   /* -------------------------------------------------------------- tooltip */
@@ -755,8 +1119,31 @@
     }
     var data = datum.data;
     var attrs = data.attrs || {};
+    if (data.edge) {
+      // A line of the hardware view: the port it leaves by and what it joins.
+      return tipCard(data.from + " \u2014 " + data.to, "Connects to", function (rows) {
+        row(rows, "Device", data.device);
+        row(rows, "Raw device", data.dev_raw);
+      });
+    }
     return tipCard(data.label || datum.id, data.tag || KIND_NAMES[data.kind] || "", function (rows) {
       switch (data.level) {
+        case "node":
+          row(rows, "Group", attrs.group);
+          row(rows, "Hardware", attrs.hw);
+          row(rows, "OS", attrs.os);
+          row(rows, "Middleware", attrs.mw);
+          row(rows, "GPU", attrs.gpu);
+          row(rows, "Display", attrs.display);
+          row(rows, "Networks", (data.networks || []).map(linkLabel).join(", "));
+          row(rows, "CSUs", data.units);
+          row(rows, "Id", datum.id);
+          break;
+        case "bus":
+          row(rows, "Purpose", attrs.purpose);
+          row(rows, "Nodes", data.count);
+          row(rows, "Id", attrs.id);
+          break;
         case "root":
         case "csms":
         case "css":
@@ -826,18 +1213,40 @@
   // The stage runs under the stepper on the header line: a fitted tree
   // keeps clear of it at the top, and of the edges elsewhere.
   var PADDING = [100, 24, 24, 24];
+  // The hardware view opens at its top left; the top is the least clearance,
+  // raised at fit time to pass under the title and context line, which
+  // float over the canvas (topClearance).
+  var PADDING_HW = [48, 24, 24, 24];
+  var OVERLAY_GAP = 36;
+
+  // How far the fixed title (the mode switch) and context line reach into
+  // the canvas, plus a gap: where the first bus may start.
+  function topClearance() {
+    var host = el.graph.getBoundingClientRect();
+    var bottom = -Infinity;
+    [document.querySelector(".shell--graph .title"), document.getElementById("graph-context")].forEach(function (node) {
+      if (node && !node.hidden) {
+        var rect = node.getBoundingClientRect();
+        if (rect.height) {
+          bottom = Math.max(bottom, rect.bottom);
+        }
+      }
+    });
+    return Math.max(PADDING_HW[0], bottom - host.top + OVERLAY_GAP);
+  }
 
   function makeGraph(data) {
     return new G6.Graph({
       container: el.graph,
       // No autoFit: fitTree sets the opening view after the render.
-      padding: PADDING,
+      padding: mode === "hw" ? PADDING_HW : PADDING,
       // Zoom range (req 43); the floor keeps a fit-to-view of a fully opened
       // CSC, thousands of pixels wide, from shrinking the boxes out of sight.
       zoomRange: [0.2, 3],
       animation: false,
       data: data,
-      layout: { type: "dsm-tree" },
+      // The hardware view's positions come with its data; the tree is laid out.
+      layout: mode === "hw" ? undefined : { type: "dsm-tree" },
       node: {
         type: "html",
         style: nodeStyle,
@@ -845,55 +1254,66 @@
         // is hovered and lit by the search shows both whichever G6 applies last.
         state: {
           active: function (datum) {
-            return { innerHTML: boxHtml(datum, modifiersOf(datum)) };
+            return { innerHTML: htmlOf(datum, modifiersOf(datum)) };
           },
           highlight: function (datum) {
-            return { innerHTML: boxHtml(datum, modifiersOf(datum)) };
+            return { innerHTML: htmlOf(datum, modifiersOf(datum)) };
           }
         }
       },
       edge: {
-        type: "polyline",
+        type: mode === "hw" ? "line" : "polyline",
         style: function (edge) {
           var style = edgeStyle(edge);
-          style.radius = 6;
+          if (mode !== "hw") {
+            style.radius = 6;
+          }
           style.stroke = COLOR.line;
           style.lineWidth = 1.25;
           return style;
         },
         state: {
-          // Lit by colour only: the rows of a list share one trunk, so a
-          // wider line or G6's default halo would stack into a thick band.
-          active: { stroke: COLOR.cyan, lineWidth: 1.25, halo: false }
+          // Lit white, like the hovered card: no halo, since the rows of a
+          // list share one trunk and G6's halo would stack into a thick band.
+          active: { stroke: "#ffffff", lineWidth: 1.75, halo: false }
         }
       },
-      // Pan, zoom and click to expand or collapse (req 43).
-      behaviors: [
-        "drag-canvas",
-        "zoom-canvas",
-        {
-          type: "collapse-expand",
-          trigger: "click",
-          animation: false,
-          align: true,
-          // An opened box moves to the middle of the stage and takes the find's
-          // gold like a search result; a closed one takes the gold where it is.
-          onExpand: function (id) {
-            light(id);
-            graph.focusElement(id, false);
-          },
-          onCollapse: light
-        },
-        { type: "hover-activate", degree: 1 }
-      ],
-      // Attribute display on hover (req 43).
+      // Pan, zoom and click to expand or collapse (req 43); the hardware
+      // view has nothing to fold.
+      behaviors: ["drag-canvas", "zoom-canvas"]
+        .concat(
+          mode === "hw"
+            ? []
+            : {
+                type: "collapse-expand",
+                trigger: "click",
+                animation: false,
+                align: true,
+                // An opened box moves to the middle of the stage and takes the find's
+                // gold like a search result; a closed one takes the gold where it is.
+                onExpand: function (id) {
+                  light(id);
+                  graph.focusElement(id, false);
+                },
+                onCollapse: light
+              }
+        )
+        .concat({ type: "hover-activate", degree: 1 }),
+      // Attribute display on hover (req 43); the hardware view's lines too.
       plugins: [
         {
           type: "tooltip",
           key: "tooltip",
           trigger: "hover",
           enable: function (event, items) {
-            return !!(items && items[0] && items[0].data && items[0].data.level !== "group" && event.targetType === "node");
+            var datum = items && items[0];
+            if (!datum || !datum.data) {
+              return false;
+            }
+            if (event.targetType === "edge") {
+              return !!datum.data.edge;
+            }
+            return datum.data.level !== "group" && datum.data.level !== "glabel" && event.targetType === "node";
           },
           getContent: function (event, items) {
             return Promise.resolve(tooltipFor(event, items));
@@ -904,22 +1324,28 @@
   }
 
   function render(msd) {
-    tree = buildTree(msd);
+    openBuses = mode === "hw" ? defaultOpen(msd) : {};
+    tree = mode === "hw" ? buildHardware(msd, openBuses) : buildTree(msd);
     lit = null;
+    resetChips();
     pending = Promise.resolve();
     if (graph) {
       graph.destroy();
+      dropLayers();
     }
     graph = makeGraph(tree.data);
     // The pointer entering or leaving the lit card redraws it, which resets
     // its rows' scroll; bring the lit row back into view.
     graph.on("node:pointerenter", relitRow);
     graph.on("node:pointerleave", relitRow);
+    // The hardware view's lines follow the view (see stretchLines).
+    lineSpan = null;
+    graph.on("aftertransform", queueStretch);
     // For the browser console and the page's tests.
     window.dsmGraph = graph;
     return graph
       .render()
-      .then(fitTree)
+      .then(fitPicture)
       .then(function () {
         if (el.panel) {
           el.panel.hidden = false;
@@ -928,9 +1354,19 @@
       });
   }
 
+  // G6 5.1 leaves its DOM layer in the container when a graph is destroyed;
+  // one per picture drawn would pile up and squeeze the next canvas.
+  function dropLayers() {
+    Array.prototype.slice.call(el.graph.children).forEach(function (child) {
+      if (child !== el.rowTip) {
+        el.graph.removeChild(child);
+      }
+    });
+  }
+
   // The hover card does not notice the pointer jumping to a toolbar button.
   function hideTooltip() {
-    var tooltip = graph.getPluginInstance("tooltip");
+    var tooltip = graph && graph.getPluginInstance("tooltip");
     if (tooltip && tooltip.hide) {
       tooltip.hide();
     }
@@ -947,6 +1383,41 @@
         return graph.fitCenter();
       });
     });
+  }
+
+  // The hardware picture is tall and narrow: fitted to the stage's width,
+  // never enlarged past zoom 1, and opened at its top under the title block,
+  // where the first buses are, rather than shrunk whole into the stage.
+  function fitHardware() {
+    var nodes = (tree && tree.data && tree.data.nodes) || [];
+    if (!nodes.length) {
+      return graph.fitCenter();
+    }
+    var left = Infinity;
+    var right = -Infinity;
+    var top = Infinity;
+    nodes.forEach(function (node) {
+      var data = node.data || {};
+      var h = heightOf(node);
+      // A bus counts for its content run, not the reach of its line.
+      var w = data.level === "bus" ? data.run : widthOf(node);
+      left = Math.min(left, node.style.x - w / 2);
+      right = Math.max(right, node.style.x + w / 2);
+      top = Math.min(top, node.style.y - h / 2);
+    });
+    var size = graph.getSize();
+    var zoom = Math.max(0.2, Math.min(1, (size[0] - PADDING_HW[1] - PADDING_HW[3]) / (right - left)));
+    return graph
+      .zoomTo(zoom, false)
+      .then(function () {
+        var at = graph.getViewportByCanvas([left, top]);
+        return graph.translateBy([PADDING_HW[3] - at[0], topClearance() - at[1]], false);
+      })
+      .then(stretchLines);
+  }
+
+  function fitPicture() {
+    return mode === "hw" ? fitHardware() : fitTree();
   }
 
   // Rebuilds the tree with the given fold and draws it in one pass: one
@@ -975,12 +1446,78 @@
     return pending;
   }
 
+  /* The hardware view's fold: the open buses' cards are rebuilt in place,
+   * and the view shifts so the bus toggled stays where it was. */
+
+  function rebuildHardware(anchorId) {
+    hideTooltip();
+    var before = anchorId && nodeData(anchorId) ? graph.getViewportByCanvas([0, nodeData(anchorId).style.y])[1] : null;
+    // The find's gold comes off first: G6 keeps an element's states across
+    // setData, so a card lit before the rebuild would stay gold.
+    return clearLit()
+      .then(function () {
+        tree = buildHardware(lastModel, openBuses);
+        graph.setData(tree.data);
+        return graph.render();
+      })
+      .then(function () {
+        renderResults();
+        var shift = 0;
+        if (before !== null && nodeData(anchorId)) {
+          shift = before - graph.getViewportByCanvas([0, nodeData(anchorId).style.y])[1];
+        }
+        // Cards open above the lines: when the grid's top would land under the
+        // title block, the view shifts down to show it instead.
+        var top = Infinity;
+        (tree.data.nodes || []).forEach(function (node) {
+          top = Math.min(top, node.style.y - heightOf(node) / 2);
+        });
+        if (top !== Infinity) {
+          var topAt = graph.getViewportByCanvas([0, top])[1] + shift;
+          shift += Math.max(0, topClearance() - topAt);
+        }
+        return (shift ? graph.translateBy([0, shift], false) : Promise.resolve()).then(stretchLines);
+      });
+  }
+
+  function toggleBus(busId) {
+    if (!graph || mode !== "hw" || !tree || !tree.entities.network[busId]) {
+      return Promise.resolve();
+    }
+    pending = pending.then(function () {
+      if (openBuses[busId]) {
+        delete openBuses[busId];
+      } else {
+        openBuses[busId] = true;
+      }
+      return rebuildHardware(busId);
+    });
+    return pending;
+  }
+
+  // Every bus open (all cards shown) or closed (the lines alone).
+  function foldBuses(open) {
+    if (!graph || mode !== "hw" || !tree) {
+      return Promise.resolve();
+    }
+    pending = pending.then(function () {
+      openBuses = {};
+      if (open) {
+        Object.keys(tree.entities.network).forEach(function (id) {
+          openBuses[id] = true;
+        });
+      }
+      return rebuildHardware(null);
+    });
+    return pending;
+  }
+
   /* --------------------------------------------------------------- search */
 
   var LIMIT = 40;
   // Results come ranked by how the query hits (prefix, word start, inside),
   // then by type in this order, then shortest name first.
-  var TYPE_ORDER = { csu: 0, hierarchy: 1, node: 2, topic: 3, message: 4, lib: 5, relation: 6 };
+  var TYPE_ORDER = { csu: 0, hierarchy: 1, node: 2, network: 2, topic: 3, message: 4, lib: 5, relation: 6 };
 
   // The panel's state: the pressed chips, the rows on show, the selected row
   // (lit until the next pick or query change) and the entity refs whose
@@ -1066,7 +1603,7 @@
       return node;
     }
     text.appendChild(elem("span", "gsearch__label", entry.label));
-    var path = entry.copies ? "in " + plural(entry.copies.length, "CSU") : pathOf(entry.id).join(" \u203a ");
+    var path = entry.path !== undefined ? entry.path : entry.copies ? "in " + plural(entry.copies.length, "CSU") : pathOf(entry.id).join(" \u203a ");
     if (path) {
       text.appendChild(elem("span", "gsearch__path", path));
     }
@@ -1243,6 +1780,29 @@
     }
     pending = pending
       .then(function () {
+        // In the hardware view a picked bus opens, and a hidden card's buses open.
+        if (mode !== "hw") {
+          return undefined;
+        }
+        var need = [];
+        if (tree.entities.network[nodeId]) {
+          if (!openBuses[nodeId]) {
+            need.push(nodeId);
+          }
+        } else if (!nodeData(nodeId)) {
+          (tree.homes[nodeId] || []).forEach(function (link) {
+            need.push(link.network);
+          });
+        }
+        if (!need.length) {
+          return undefined;
+        }
+        need.forEach(function (id) {
+          openBuses[id] = true;
+        });
+        return rebuildHardware(null);
+      })
+      .then(function () {
         return chain.reduce(function (step, id) {
           return step.then(function () {
             var datum = nodeData(id);
@@ -1259,6 +1819,17 @@
       })
       .then(scrollLitRow);
     return pending;
+  }
+
+  // Every chip released: a new picture starts with every type on.
+  function resetChips() {
+    types = [];
+    cursor = -1;
+    if (el.panel) {
+      Array.prototype.forEach.call(el.panel.querySelectorAll(".gsearch__chip"), function (chip) {
+        chip.setAttribute("aria-pressed", "false");
+      });
+    }
   }
 
   // The panel's parts and listeners, taken once with the container.
@@ -1334,6 +1905,14 @@
     el.rowTip.className = "tooltip tooltip--row";
     el.rowTip.hidden = true;
     el.graph.appendChild(el.rowTip);
+    // A click on a bus's name or toggle folds its cards in or out.
+    el.graph.addEventListener("click", function (event) {
+      var label = closest(event, ".bus__label");
+      var bus = label && label.closest(".bus");
+      if (bus) {
+        toggleBus(bus.getAttribute("data-id"));
+      }
+    });
     el.graph.addEventListener("mouseover", function (event) {
       var rowEl = closest(event, ".list__row");
       if (rowEl) {
@@ -1370,17 +1949,23 @@
     window.addEventListener("resize", function () {
       if (graph) {
         graph.resize();
+        queueStretch();
       }
     });
   }
 
-  // Draws the model's graph (SRS DSM-SMM req 6, 7); resolves once the first picture is on screen.
-  function load(msd) {
+  // Draws the model's graph (SRS DSM-SMM req 6, 7) in the given mode, "sw"
+  // or "hw" (the current one when none); resolves once the first picture
+  // is on screen.
+  function load(msd, which) {
     if (!mounted) {
       return Promise.reject(new Error("mount() first"));
     }
     if (typeof G6 === "undefined" || !G6.Graph || !G6.treeToGraphData) {
       return Promise.reject(new Error("The graph library is missing."));
+    }
+    if (which === "sw" || which === "hw") {
+      mode = which;
     }
     lastModel = msd;
     return (document.fonts ? document.fonts.ready : Promise.resolve()).then(function () {
@@ -1393,7 +1978,7 @@
       return Promise.resolve();
     }
     hideTooltip();
-    return fitTree();
+    return fitPicture();
   }
 
   // Lets the container's size change through: the canvas follows it.
@@ -1406,6 +1991,7 @@
   function destroy() {
     if (graph) {
       graph.destroy();
+      dropLayers();
       graph = null;
     }
     lit = null;
@@ -1423,10 +2009,10 @@
     fit: fit,
     resize: resize,
     expandToCsu: function () {
-      return queueRebuild(true);
+      return mode === "hw" ? foldBuses(true) : queueRebuild(true);
     },
     collapseAll: function () {
-      return queueRebuild(false);
+      return mode === "hw" ? foldBuses(false) : queueRebuild(false);
     },
     destroy: destroy
   };

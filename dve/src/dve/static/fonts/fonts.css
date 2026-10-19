@@ -50,7 +50,8 @@
  * https://cdn.jsdelivr.net/npm/lucide-static@1.43.0/font/lucide.woff2:
  * pyftsubset lucide.woff2 --unicodes=U+e049,... --flavor=woff2 --output-file=lucide-subset.woff2
  * (36 glyphs at present; the graph stage uses the ship, layers, boxes,
- * box, cpu, server, radio, mail and library ones)
+ * box, cpu, server, radio, mail and library ones, and network for the
+ * hardware view's buses)
  */
 @font-face {
   font-family: lucide;

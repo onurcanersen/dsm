@@ -55,8 +55,10 @@ class ModelSetupDataGraph:
         publishes_to, subscribes_to, sends, receives, uses, connects_to = [], [], [], [], [], []
         for relation in relations:
             if relation.kind is RelationKind.CONNECTS_TO:
-                source = node_ids.get(relation.from_name) or network_ids.get(relation.from_name)
-                target = node_ids.get(relation.to_name) or network_ids.get(relation.to_name)
+                # A node on a network, nothing else: a link from or to anything
+                # unknown, or between two networks, is dropped.
+                source = node_ids.get(relation.from_name)
+                target = network_ids.get(relation.to_name)
                 if source is None or target is None:
                     continue
                 connects_to.append({

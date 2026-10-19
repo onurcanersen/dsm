@@ -73,6 +73,16 @@ def test_connects_to_join_node_and_network_ids_by_name_and_drop_unresolvable():
     ]
 
 
+def test_connects_to_is_a_node_on_a_network_only():
+    graph = _graph(connects=[
+        ConnectsTo(seed.SWITCH_0, seed.SWITCH_1, device="uplink", dev_raw="xe-0/0/0"),
+        ConnectsTo(seed.SWITCH_0, seed.NODE_0, device="eth0", dev_raw="ens1f0"),
+        ConnectsTo(seed.NODE_1, seed.SWITCH_0, device="eth0", dev_raw="ens1f0"),
+    ])
+
+    assert graph["relationships"]["connects_to"] == [{"from": "N1", "to": "W0", "device": "eth0", "dev_raw": "ens1f0"}]
+
+
 def test_connects_device_fields_default_to_not_found():
     graph = _graph(connects=[ConnectsTo(seed.NODE_0, seed.SWITCH_0)])
 

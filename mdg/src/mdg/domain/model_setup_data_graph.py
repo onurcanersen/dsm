@@ -1,7 +1,8 @@
-"""The node-relationship graph of the Model Setup Data: processor units,
-topics, applications, libraries and networks, and the runs_on / publishes_to /
-subscribes_to / uses / connects_to relationships between them (SRS DSM-MDG
-req 19; DSM-SMM req 6-7)."""
+"""The node-relationship graph of the Model Setup Data: nodes (the system
+repo's processor units merged with the ansible repo's), topics, applications,
+libraries and networks, and the runs_on / publishes_to / subscribes_to /
+uses / connects_to relationships between them (SRS DSM-MDG req 19; DSM-SMM
+req 6-7)."""
 
 from __future__ import annotations
 
@@ -38,7 +39,10 @@ class ModelSetupDataGraph:
     ) -> Dict[str, Any]:
         """The graph of one run (req 19)."""
         versions = {u.unit_name: u.version for u in inventory.units}
-        node_ids = cls._ids("N", [node for _, node in app_node_relations if node and node != NOT_FOUND])
+        # The node set merges the system repo's nodes with the ansible repo's:
+        # existing nodes are enriched, ansible nodes the system repo omits are added.
+        node_enrichment = {n.name: n for n in nodes if n.name and n.name != NOT_FOUND}
+        node_ids = cls._ids("N", [node for _, node in app_node_relations if node and node != NOT_FOUND] + list(node_enrichment))
         app_ids = cls._ids("A", [app for app, _ in app_node_relations])
         lib_ids = cls._ids("L", [
             r.target for r in relations
@@ -48,7 +52,6 @@ class ModelSetupDataGraph:
         topic_ids = cls._ids("T", list(topics_by_name))
         messages_by_name = {m.name: m for m in messages}
         message_ids = cls._ids("M", list(messages_by_name))
-        node_enrichment = {n.name: n for n in nodes}
         networks_by_name = {n.name: n for n in networks}
         network_ids = cls._ids("W", list(networks_by_name))
 

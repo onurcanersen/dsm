@@ -3,7 +3,7 @@
 
 from fakes import seed
 from mdg.domain.inventory import SoftwareUnitVersionInventory
-from mdg.domain.model_setup_data_graph import ModelSetupDataGraph
+from mdg.domain.model_setup_data_graph import NOT_FOUND, ModelSetupDataGraph
 from mdg.domain.source_data import ConnectsTo, Message, Network, Node, RelationKind, Topic, UnitRelation
 
 APP_NODES = [(seed.NAV_APP, seed.NODE_0), (seed.SENSOR_APP, seed.NODE_1)]
@@ -95,6 +95,33 @@ def test_without_ansible_data_nodes_are_not_found_and_network_lists_empty():
     assert graph["networks"] == []
     assert graph["relationships"]["connects_to"] == []
     assert all(graph["nodes"][1][key] == "NOT_FOUND" for key in ("group", "hw", "os", "mw", "gpu", "display"))
+
+
+def test_ansible_nodes_merge_with_the_system_repo_nodes():
+    graph = _graph(nodes=[*NODE_ATTRS, Node("Node-2", group="processors", hw="x86-64/16c")])
+
+    assert [(n["id"], n["name"], n["group"], n["hw"]) for n in graph["nodes"]] == [
+        ("N0", seed.NODE_0, "processors", "x86-64/8c"),
+        ("N1", seed.NODE_1, "NOT_FOUND", "NOT_FOUND"),
+        ("N2", "Node-2", "processors", "x86-64/16c"),
+    ]
+    assert graph["metadata"]["scale"]["nodes"] == 3
+    assert graph["relationships"]["runs_on"] == [{"from": "A0", "to": "N0"}, {"from": "A1", "to": "N1"}]
+
+
+def test_connects_to_from_an_ansible_only_node_resolves():
+    graph = _graph(
+        nodes=[*NODE_ATTRS, Node("Node-2", group="processors")],
+        connects=[ConnectsTo("Node-2", seed.SWITCH_0, device="eth0", dev_raw="ens1f0")],
+    )
+
+    assert graph["relationships"]["connects_to"] == [{"from": "N2", "to": "W0", "device": "eth0", "dev_raw": "ens1f0"}]
+
+
+def test_ansible_nodes_without_a_name_are_ignored():
+    graph = _graph(nodes=[*NODE_ATTRS, Node(""), Node(NOT_FOUND, group="processors")])
+
+    assert [n["name"] for n in graph["nodes"]] == [seed.NODE_0, seed.NODE_1]
 
 
 def test_relationships_join_by_entity_id():

@@ -1,5 +1,5 @@
-"""Port for the parser of the cloned ansible repo: the enrichment of the
-processor units, the networks and the connects between them
+"""Port for the parser of the cloned ansible repo: the nodes with their
+enrichment, the networks and the connects between them
 (SRS DSM-MDG req 2.4, 3)."""
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ class IAnsibleRepoParser(ABC):
 
     @abstractmethod
     def get_nodes(self) -> List[Node]:
-        """The enrichment of each processor unit by name (req 3)."""
+        """The nodes with their enrichment, by name (req 3)."""
 
     @abstractmethod
     def get_networks(self) -> List[Network]:

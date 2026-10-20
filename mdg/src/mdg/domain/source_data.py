@@ -1,6 +1,6 @@
 """Source data parsed from the acquired software units and the ansible repo:
 the relationships a unit has with topics and libraries, topics with their QoS,
-the node enrichment, networks and connects of the ansible repo
+the nodes and their enrichment, networks and connects of the ansible repo
 (SRS DSM-MDG req 2.4, 3, 19; DSM-SMM req 6-7)."""
 
 from __future__ import annotations
@@ -90,8 +90,9 @@ class Message:
 
 @dataclass(frozen=True)
 class Node:
-    """The enrichment the ansible repo adds to a graph node by name; it
-    declares no graph node of its own (SRS DSM-MDG req 2.4, 3)."""
+    """A node the ansible repo declares by name, with its enrichment; the
+    graph merges these with the nodes the system repo names, so an ansible
+    node the system repo omits is added (SRS DSM-MDG req 2.4, 3)."""
     name: str
     group: Optional[str] = None
     hw: Optional[str] = None

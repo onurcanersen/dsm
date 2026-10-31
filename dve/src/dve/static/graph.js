@@ -364,9 +364,10 @@
       busPorts[id] = [];
     });
 
-    // The lines' content run: the stage's width at zoom 1, at least MIN_RUN;
-    // a row of cards also ends where it would pass the run's end.
-    var run = Math.max(MIN_RUN, (el.graph ? el.graph.clientWidth : 0) - PADDING_HW[1] - PADDING_HW[3]);
+    // The lines' content run: the stage's width at the opening zoom (the
+    // root scale), at least MIN_RUN; a row of cards also ends where it would
+    // pass the run's end.
+    var run = Math.max(MIN_RUN, (el.graph ? el.graph.clientWidth : 0) / uiScale() - PADDING_HW[1] - PADDING_HW[3]);
     var wrapRight = run - END_PAD;
 
     var x = CONTENT_X;
@@ -764,8 +765,8 @@
       return;
     }
     var size = graph.getSize();
-    var left = graph.getCanvasByViewport([VIEW_MARGIN, 0])[0];
-    var right = graph.getCanvasByViewport([size[0] - VIEW_MARGIN, 0])[0];
+    var left = graph.getCanvasByViewport([viewPx(VIEW_MARGIN), 0])[0];
+    var right = graph.getCanvasByViewport([size[0] - viewPx(VIEW_MARGIN), 0])[0];
     lineSpan = { left: left, width: Math.max(0, right - left) };
     Array.prototype.forEach.call(el.graph.querySelectorAll(".bus__line"), function (line) {
       line.style.left = lineSpan.left + "px";
@@ -1212,12 +1213,31 @@
 
   // The stage runs under the stepper on the header line: a fitted tree
   // keeps clear of it at the top, and of the edges elsewhere.
+  // The boxes are laid out in the design px of app.css's box rules; the
+  // whole picture is then zoomed by the page's root scale (app.css: the
+  // 1440x900 design scaled by the screen), so the tree grows with the UI.
+  function uiScale() {
+    var root = getComputedStyle(document.documentElement);
+    var ref = parseFloat(root.getPropertyValue("--ref-root")) || 10;
+    return (parseFloat(root.fontSize) || ref) / ref;
+  }
+
+  // Viewport margins, in the design's px; viewPx scales one by the root
+  // scale so they keep pace with the title block beside them.
   var PADDING = [100, 24, 24, 24];
   // The hardware view opens at its top left; the top is the least clearance,
   // raised at fit time to pass under the title and context line, which
   // float over the canvas (topClearance).
   var PADDING_HW = [48, 24, 24, 24];
   var OVERLAY_GAP = 36;
+
+  function viewPx(n) {
+    return n * uiScale();
+  }
+
+  function stagePadding() {
+    return (mode === "hw" ? PADDING_HW : PADDING).map(viewPx);
+  }
 
   // How far the fixed title (the mode switch) and context line reach into
   // the canvas, plus a gap: where the first bus may start.
@@ -1232,17 +1252,18 @@
         }
       }
     });
-    return Math.max(PADDING_HW[0], bottom - host.top + OVERLAY_GAP);
+    return Math.max(viewPx(PADDING_HW[0]), bottom - host.top + viewPx(OVERLAY_GAP));
   }
 
   function makeGraph(data) {
     return new G6.Graph({
       container: el.graph,
       // No autoFit: fitTree sets the opening view after the render.
-      padding: mode === "hw" ? PADDING_HW : PADDING,
-      // Zoom range (req 43); the floor keeps a fit-to-view of a fully opened
-      // CSC, thousands of pixels wide, from shrinking the boxes out of sight.
-      zoomRange: [0.2, 3],
+      padding: stagePadding(),
+      // Zoom range (req 43), relative to the root scale; the floor keeps a
+      // fit-to-view of a fully opened CSC, thousands of pixels wide, from
+      // shrinking the boxes out of sight.
+      zoomRange: [0.2 * uiScale(), 3 * uiScale()],
       animation: false,
       data: data,
       // The hardware view's positions come with its data; the tree is laid out.
@@ -1372,21 +1393,23 @@
     }
   }
 
-  // The tree fitted to the stage but never enlarged past zoom 1 (req 43):
-  // a wide tree shrinks to fit, a small one opens centred at its natural size.
+  // The tree fitted to the stage but never enlarged past the root scale
+  // (req 43): a wide tree shrinks to fit, a small one opens centred at its
+  // natural size, which is the design size times the page's scale.
   function fitTree() {
+    var cap = uiScale();
     return graph.fitView().then(function () {
-      if (graph.getZoom() <= 1) {
+      if (graph.getZoom() <= cap) {
         return undefined;
       }
-      return graph.zoomTo(1, false).then(function () {
+      return graph.zoomTo(cap, false).then(function () {
         return graph.fitCenter();
       });
     });
   }
 
   // The hardware picture is tall and narrow: fitted to the stage's width,
-  // never enlarged past zoom 1, and opened at its top under the title block,
+  // never enlarged past the root scale, and opened at its top under the title block,
   // where the first buses are, rather than shrunk whole into the stage.
   function fitHardware() {
     var nodes = (tree && tree.data && tree.data.nodes) || [];
@@ -1406,12 +1429,14 @@
       top = Math.min(top, node.style.y - h / 2);
     });
     var size = graph.getSize();
-    var zoom = Math.max(0.2, Math.min(1, (size[0] - PADDING_HW[1] - PADDING_HW[3]) / (right - left)));
+    var cap = uiScale();
+    var pad = stagePadding();
+    var zoom = Math.max(0.2 * cap, Math.min(cap, (size[0] - pad[1] - pad[3]) / (right - left)));
     return graph
       .zoomTo(zoom, false)
       .then(function () {
         var at = graph.getViewportByCanvas([left, top]);
-        return graph.translateBy([PADDING_HW[3] - at[0], topClearance() - at[1]], false);
+        return graph.translateBy([pad[3] - at[0], topClearance() - at[1]], false);
       })
       .then(stretchLines);
   }

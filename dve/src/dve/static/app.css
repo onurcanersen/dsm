@@ -45,46 +45,46 @@
   --sb-thumb: var(--cyan-dim);
 
   /* Card header rhythm: title, mark, subtitle, content, command bar. */
-  --gap-mark: 16px;
-  --gap-lead: 22px;
-  --gap-body: 32px;
-  --gap-actions: 24px;
-  --gap-actions-tight: 8px;
+  --gap-mark: 1.6rem;
+  --gap-lead: 2.2rem;
+  --gap-body: 3.2rem;
+  --gap-actions: 2.4rem;
+  --gap-actions-tight: .8rem;
 
   /* Card widths and radii. */
-  --card-pad: 28px 26px;
-  --w-signin: min(292px, 100%);
-  --w-form: min(392px, 100%);
-  --w-list: min(480px, 100%);
-  --w-full: min(1180px, 100%);
+  --card-pad: 2.8rem 2.6rem;
+  --w-signin: min(29.2rem, 100%);
+  --w-form: min(39.2rem, 100%);
+  --w-list: min(48rem, 100%);
+  --w-full: min(118rem, 100%);
   /* The run deck's console column: the left half, leaving the ship on the background clear. */
-  --w-run: min(600px, 52%);
-  --r-card: 14px;
-  --r-panel: 8px;
-  --r-control: 6px;
-  --r-pill: 999px;
+  --w-run: min(60rem, 52%);
+  --r-card: 1.4rem;
+  --r-panel: .8rem;
+  --r-control: .6rem;
+  --r-pill: 99.9rem;
 
-  --fs-display: 24px;
-  --fs-title: 20px;
-  --fs-control: 13px;
-  --fs-row: 12.5px;
-  --fs-value: 11.5px;
-  --fs-sub: 11px;
-  --fs-info: 11px;
-  --fs-detail: 10.5px;
-  --fs-label: 9.5px;
-  --fs-chip: 9px;
+  --fs-display: 2.4rem;
+  --fs-title: 2rem;
+  --fs-control: 1.3rem;
+  --fs-row: 1.25rem;
+  --fs-value: 1.15rem;
+  --fs-sub: 1.1rem;
+  --fs-info: 1.1rem;
+  --fs-detail: 1.05rem;
+  --fs-label: .95rem;
+  --fs-chip: .9rem;
   --ls-sub: 0.2em;
   --ls-label: 0.18em;
   --ls-tight: 0.14em;
   --ls-text: 0.04em;
 
-  --icon-xs: 10px;
-  --icon-sm: 13px;
-  --icon-md: 16px;
-  --icon-lg: 19px;
-  --icon-xl: 34px;
-  --icon-size: 60px;
+  --icon-xs: 1rem;
+  --icon-sm: 1.3rem;
+  --icon-md: 1.6rem;
+  --icon-lg: 1.9rem;
+  --icon-xl: 3.4rem;
+  --icon-size: 6rem;
 }
 
 html,
@@ -93,11 +93,35 @@ body {
   margin: 0;
 }
 
+/* The one scale: every length below is in rem, and the root is the design
+   reference scaled by the screen. The UI was drawn at 1440x900 with a 10px
+   root (so 12.5px reads as 1.25rem); any other screen gets that root times
+   the ratio of its shorter side to the reference's, so cards, type, icons
+   and gaps keep the same share of the screen at every size (12px at
+   1920x1080, 16px at 2560x1440, 24px at 3840x2160, 48px at 7680x4320).
+   The shorter side, so a wide short strip scales by its height and fits.
+   Never below the reference: small screens keep the designed layout and the
+   narrow-screen media queries take over. Hairlines, shadows, the scrollbar
+   chrome and the media-query breakpoints stay in px. */
+:root {
+  --ref-root: 10; /* px per rem at the reference screen */
+  --ref-min: 900; /* the reference screen's shorter side, px */
+}
+
+html {
+  font-size: max(calc(var(--ref-root) * 1px), calc(100vmin * var(--ref-root) / var(--ref-min)));
+}
+
+/* Text with no size of its own keeps the 16px it inherited before. */
+body {
+  font-size: 1.6rem;
+}
+
 body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 2.4rem;
   box-sizing: border-box;
   font-family: Barlow, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   color: var(--ink);
@@ -204,7 +228,7 @@ html::-webkit-scrollbar-corner,
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 22px;
+  gap: 2.2rem;
   width: var(--w-list);
   margin: auto;
 }
@@ -214,17 +238,17 @@ html::-webkit-scrollbar-corner,
 .brandbar,
 .sessionbar {
   position: fixed;
-  top: 24px;
+  top: 2.4rem;
   z-index: 5;
   display: flex;
   align-items: center;
-  height: 38px;
+  height: 3.8rem;
 }
 
 /* Who is signed in, pinned to the page corner. */
 .sessionbar {
-  right: 24px;
-  gap: 11px;
+  right: 2.4rem;
+  gap: 1.1rem;
   font-size: var(--fs-row);
   letter-spacing: var(--ls-tight);
   text-transform: uppercase;
@@ -249,7 +273,7 @@ html::-webkit-scrollbar-corner,
 .sessionbar__divider {
   flex: none;
   width: 1px;
-  height: 21px;
+  height: 2.1rem;
   background-color: var(--line);
 }
 
@@ -258,8 +282,8 @@ html::-webkit-scrollbar-corner,
   display: flex;
   flex: none;
   align-items: center;
-  gap: 8px;
-  padding: 5px 11px;
+  gap: .8rem;
+  padding: .5rem 1.1rem;
   border: 1px solid var(--cyan-dim);
   border-radius: var(--r-pill);
   background-color: var(--tint-cyan);
@@ -318,8 +342,8 @@ html::-webkit-scrollbar-corner,
 
 /* The product lockup, pinned to the top-left corner while signed in. */
 .brandbar {
-  left: 24px;
-  gap: 5px;
+  left: 2.4rem;
+  gap: .5rem;
 }
 
 .brandbar__img {
@@ -328,18 +352,18 @@ html::-webkit-scrollbar-corner,
 }
 
 .brandbar__img--left {
-  height: 38px;
+  height: 3.8rem;
 }
 
 .brandbar__img--right {
-  height: 30px;
+  height: 3rem;
 }
 
 .linkbtn {
   flex: none;
   display: flex;
   align-items: center;
-  padding: 2px 4px;
+  padding: 2px .4rem;
   border: 0;
   border-radius: var(--r-pill);
   background: transparent;
@@ -367,7 +391,7 @@ html::-webkit-scrollbar-corner,
 
 .stepper__item {
   position: relative;
-  flex: 0 0 64px;
+  flex: 0 0 6.4rem;
 }
 
 /* A reached stage is a way back to it; an unreached one is inert. */
@@ -375,7 +399,7 @@ html::-webkit-scrollbar-corner,
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
+  gap: .8rem;
   width: 100%;
   padding: 0;
   border: 0;
@@ -404,7 +428,7 @@ html::-webkit-scrollbar-corner,
 .stepper__item::before {
   content: "";
   position: absolute;
-  top: 13px;
+  top: 1.3rem;
   left: -50%;
   width: 100%;
   height: 2px;
@@ -429,8 +453,8 @@ html::-webkit-scrollbar-corner,
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 2.8rem;
+  height: 2.8rem;
   border: 2px solid var(--line);
   border-radius: 50%;
   background-color: #06202b;
@@ -508,7 +532,7 @@ html::-webkit-scrollbar-corner,
 
 @media (max-width: 420px) {
   .stepper__item {
-    flex-basis: 56px;
+    flex-basis: 5.6rem;
   }
 }
 
@@ -537,7 +561,7 @@ html::-webkit-scrollbar-corner,
 .card[data-view="select"] .card__body,
 .card[data-view="inventory"] .card__body,
 .card[data-view="files"] .card__body {
-  min-height: 268px;
+  min-height: 26.8rem;
 }
 
 /* Frosted fill: a clipped copy of the pre-blurred page background, since Firefox 90 has no backdrop-filter. */
@@ -582,9 +606,12 @@ html::-webkit-scrollbar-corner,
 .mpanel__corners::after {
   content: "";
   position: absolute;
-  width: 70px;
-  height: 70px;
+  width: 7rem;
+  height: 7rem;
   background: url("img/bracket-bottom.svg") no-repeat;
+  /* The SVG fills its box, so the bracket grows with the root scale and
+     stays on the corner instead of drifting inward at its own 70px size. */
+  background-size: 100% 100%;
   z-index: 2;
   pointer-events: none;
 }
@@ -600,33 +627,33 @@ html::-webkit-scrollbar-corner,
 .card::after,
 .mpanel::before,
 .mpanel::after {
-  height: 94px;
+  height: 9.4rem;
   background-image: url("img/bracket-top.svg");
 }
 
 .card::before,
 .mpanel::before {
-  top: -18px;
-  left: -18px;
+  top: -1.8rem;
+  left: -1.8rem;
 }
 
 .card::after,
 .mpanel::after {
-  top: -18px;
-  right: -18px;
+  top: -1.8rem;
+  right: -1.8rem;
   transform: scaleX(-1);
 }
 
 .card__corners::before,
 .mpanel__corners::before {
-  bottom: -18px;
-  left: -18px;
+  bottom: -1.8rem;
+  left: -1.8rem;
 }
 
 .card__corners::after,
 .mpanel__corners::after {
-  bottom: -18px;
-  right: -18px;
+  bottom: -1.8rem;
+  right: -1.8rem;
   transform: scaleX(-1);
 }
 
@@ -652,7 +679,7 @@ html::-webkit-scrollbar-corner,
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: .6rem;
   margin: var(--gap-mark) auto 0;
 }
 
@@ -662,11 +689,11 @@ html::-webkit-scrollbar-corner,
 }
 
 .logo__img--left {
-  height: 104px;
+  height: 10.4rem;
 }
 
 .logo__img--right {
-  width: 118px;
+  width: 11.8rem;
   height: auto;
 }
 
@@ -756,9 +783,9 @@ html::-webkit-scrollbar-corner,
 .run__ship {
   position: absolute;
   top: 50%;
-  right: -160px;
+  right: -16rem;
   z-index: 0;
-  width: calc(100% - var(--w-run) + 150px);
+  width: calc(100% - var(--w-run) + 15rem);
   transform: translateY(-50%);
   filter: drop-shadow(0 0 24px rgba(34, 230, 245, 0.25));
   pointer-events: none;
@@ -769,7 +796,7 @@ html::-webkit-scrollbar-corner,
   position: relative;
   display: flex;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 1rem;
   border: 1px solid var(--cyan-dim);
   border-radius: var(--r-control);
   background-color: rgba(4, 22, 31, 0.5);
@@ -777,7 +804,7 @@ html::-webkit-scrollbar-corner,
 }
 
 .field > .lucide {
-  padding: 0 12px;
+  padding: 0 1.2rem;
   font-size: var(--icon-md);
   color: var(--cyan);
   opacity: 0.85;
@@ -786,7 +813,7 @@ html::-webkit-scrollbar-corner,
 .field input {
   flex: 1;
   min-width: 0;
-  padding: 10px 12px 10px 0;
+  padding: 1rem 1.2rem 1rem 0;
   border: 0;
   background: transparent;
   color: var(--ink);
@@ -807,7 +834,7 @@ html::-webkit-scrollbar-corner,
 }
 
 .reveal {
-  padding: 0 12px;
+  padding: 0 1.2rem;
   border: 0;
   border-radius: var(--r-control);
   background: transparent;
@@ -826,9 +853,9 @@ html::-webkit-scrollbar-corner,
 .message {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  margin: 4px 0 0;
-  padding: 8px 10px;
+  gap: .8rem;
+  margin: .4rem 0 0;
+  padding: .8rem 1rem;
   border: 1px solid var(--line);
   border-radius: var(--r-control);
   background-color: var(--tint-ink);
@@ -864,19 +891,19 @@ html::-webkit-scrollbar-corner,
 @keyframes message-in {
   from {
     opacity: 0;
-    transform: translateY(-3px);
+    transform: translateY(-.3rem);
   }
 }
 
 #view-sources .message:not(:empty) {
-  margin-top: 18px;
+  margin-top: 1.8rem;
 }
 
 /* The action row owns the gap above itself. */
 .actions {
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: .9rem;
   margin-top: var(--gap-actions);
 }
 
@@ -903,7 +930,7 @@ html::-webkit-scrollbar-corner,
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 12px 16px;
+  padding: 1.2rem 1.6rem;
   border: 1px solid var(--cyan);
   border-radius: var(--r-control);
   background-color: var(--tint-cyan);
@@ -918,7 +945,7 @@ html::-webkit-scrollbar-corner,
 }
 
 .submit__arrow {
-  margin-left: 10px;
+  margin-left: 1rem;
   font-size: var(--icon-md);
   line-height: 1;
   transition: transform var(--t), text-shadow var(--t);
@@ -931,7 +958,7 @@ html::-webkit-scrollbar-corner,
 }
 
 .submit:hover:not(:disabled) .submit__arrow {
-  transform: translateX(4px);
+  transform: translateX(.4rem);
   text-shadow: 0 0 6px rgba(34, 230, 245, 0.7);
 }
 
@@ -957,9 +984,9 @@ html::-webkit-scrollbar-corner,
 /* Sized to its own label rather than the row. */
 .submit--compact {
   flex: none;
-  gap: 8px;
+  gap: .8rem;
   width: auto;
-  padding: 10px 14px;
+  padding: 1rem 1.4rem;
   font-size: var(--fs-info);
   letter-spacing: var(--ls-tight);
 }
@@ -996,8 +1023,8 @@ html::-webkit-scrollbar-corner,
 
 .spinner {
   display: inline-block;
-  width: 13px;
-  height: 13px;
+  width: 1.3rem;
+  height: 1.3rem;
   vertical-align: -2px;
   border: 2px solid rgba(34, 230, 245, 0.25);
   border-top-color: var(--cyan);
@@ -1006,7 +1033,7 @@ html::-webkit-scrollbar-corner,
 }
 
 .submit__label .spinner {
-  margin-right: 9px;
+  margin-right: .9rem;
 }
 
 @keyframes spin {
@@ -1031,11 +1058,11 @@ html::-webkit-scrollbar-corner,
 
 .label {
   display: block;
-  margin: 0 0 5px;
+  margin: 0 0 .5rem;
 }
 
 .picker {
-  margin-bottom: 12px;
+  margin-bottom: 1.2rem;
 }
 
 .picker__control {
@@ -1050,7 +1077,7 @@ html::-webkit-scrollbar-corner,
 
 .picker__control .lucide {
   position: absolute;
-  right: 11px;
+  right: 1.1rem;
   font-size: var(--icon-sm);
   color: var(--cyan);
   pointer-events: none;
@@ -1059,7 +1086,7 @@ html::-webkit-scrollbar-corner,
 /* Platform chrome dropped; the chevron stands in for it. */
 .picker select {
   width: 100%;
-  padding: 10px 32px 10px 12px;
+  padding: 1rem 3.2rem 1rem 1.2rem;
   border: 0;
   border-radius: var(--r-control);
   background: transparent;
@@ -1091,7 +1118,7 @@ html::-webkit-scrollbar-corner,
 .picker__spinner {
   display: none;
   position: absolute;
-  right: 9px;
+  right: .9rem;
   width: var(--icon-xs);
   height: var(--icon-xs);
   border-width: 1px;
@@ -1110,7 +1137,7 @@ html::-webkit-scrollbar-corner,
 .sources {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 14px;
+  gap: 1.4rem;
 }
 
 @media (max-width: 360px) {
@@ -1124,10 +1151,10 @@ html::-webkit-scrollbar-corner,
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 1rem;
   width: 100%;
-  min-height: 104px;
-  padding: 16px 10px;
+  min-height: 10.4rem;
+  padding: 1.6rem 1rem;
   box-sizing: border-box;
   border: 1px solid var(--cyan-dim);
   border-radius: var(--r-panel);
@@ -1167,14 +1194,14 @@ html::-webkit-scrollbar-corner,
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  margin: 9px 0 0;
+  gap: .7rem;
+  margin: .9rem 0 0;
 }
 
 .source__dot {
   flex: none;
-  width: 7px;
-  height: 7px;
+  width: .7rem;
+  height: .7rem;
   border-radius: 50%;
   background-color: var(--muted);
 }
@@ -1196,7 +1223,7 @@ html::-webkit-scrollbar-corner,
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 2.4rem;
   box-sizing: border-box;
 }
 
@@ -1208,18 +1235,18 @@ html::-webkit-scrollbar-corner,
 
 /* A card at compact scale: the header tokens are restated three-quarters the size. */
 .modal__panel {
-  --fs-title: 15px;
-  --icon-size: 40px;
-  --gap-mark: 10px;
-  --gap-lead: 14px;
-  --gap-body: 22px;
+  --fs-title: 1.5rem;
+  --icon-size: 4rem;
+  --gap-mark: 1rem;
+  --gap-lead: 1.4rem;
+  --gap-body: 2.2rem;
 
   position: relative;
   box-sizing: border-box;
-  width: min(340px, 100%);
+  width: min(34rem, 100%);
   max-height: 100%;
   overflow-y: auto;
-  padding: 26px 26px 24px;
+  padding: 2.6rem 2.6rem 2.4rem;
   border: 2px solid rgba(34, 230, 245, 0.3);
   border-radius: var(--r-card);
   background-color: #06202b;
@@ -1231,18 +1258,18 @@ html::-webkit-scrollbar-corner,
 @keyframes modal-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
+    transform: translateY(.6rem);
   }
 }
 
 .modal__close {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: 1.2rem;
+  right: 1.2rem;
 }
 
 .modal__panel .title {
-  padding: 0 20px;
+  padding: 0 2rem;
 }
 
 /* The model card's and the graph stage's context as one slash-separated
@@ -1251,7 +1278,7 @@ html::-webkit-scrollbar-corner,
   display: flex;
   align-items: baseline;
   justify-content: center;
-  gap: 8px;
+  gap: .8rem;
   margin: var(--gap-lead) 0 var(--gap-body);
   overflow: hidden;
 }
@@ -1272,7 +1299,7 @@ html::-webkit-scrollbar-corner,
 
 .context__cell + .context__cell::before {
   content: "/";
-  margin-right: 8px;
+  margin-right: .8rem;
   color: var(--muted);
 }
 
@@ -1305,7 +1332,7 @@ html::-webkit-scrollbar-corner,
 .files {
   display: flex;
   flex-direction: column;
-  height: min(268px, calc(22vh + 78px));
+  height: min(26.8rem, calc(22vh + 7.8rem));
 }
 
 .units {
@@ -1319,10 +1346,10 @@ html::-webkit-scrollbar-corner,
 .mpanel__bar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: .8rem;
   box-sizing: border-box;
-  min-height: 34px;
-  padding: 8px 12px;
+  min-height: 3.4rem;
+  padding: .8rem 1.2rem;
   border-bottom: 1px solid var(--line);
   background-color: rgba(4, 22, 31, 0.5);
 }
@@ -1360,7 +1387,7 @@ html::-webkit-scrollbar-corner,
 .units__row,
 .filerow,
 .mrow {
-  padding: 9px 12px;
+  padding: .9rem 1.2rem;
   border-bottom: 1px solid var(--line);
 }
 
@@ -1375,7 +1402,7 @@ html::-webkit-scrollbar-corner,
 .mrow__head {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 1rem;
 }
 
 /* A name that gives way first, and a value in cyan that never does. */
@@ -1431,10 +1458,10 @@ html::-webkit-scrollbar-corner,
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 1rem;
   box-sizing: border-box;
   min-height: 100%;
-  padding: 26px 18px;
+  padding: 2.6rem 1.8rem;
   text-align: center;
 }
 
@@ -1443,8 +1470,8 @@ html::-webkit-scrollbar-corner,
   flex: none;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
+  width: 4.2rem;
+  height: 4.2rem;
   border: 1px solid var(--cyan-dim);
   border-radius: 50%;
   background-color: var(--tint-cyan);
@@ -1499,11 +1526,11 @@ html::-webkit-scrollbar-corner,
 }
 
 .card[data-view="boot"] .empty {
-  padding: 6px 0 2px;
+  padding: .6rem 0 2px;
 }
 
 #model-loading {
-  padding: 60px 18px;
+  padding: 6rem 1.8rem;
 }
 
 /* ------------------------------------------------ inventory card */
@@ -1548,7 +1575,7 @@ html::-webkit-scrollbar-corner,
 /* Marks a candidate version (SRS DSM-MDG req 11). */
 .units__badge {
   flex: none;
-  padding: 2px 7px;
+  padding: 2px .7rem;
   border: 1px solid var(--ok-dim);
   border-radius: var(--r-pill);
   font-size: var(--fs-chip);
@@ -1569,7 +1596,7 @@ html::-webkit-scrollbar-corner,
   display: flex;
   flex: none;
   align-items: center;
-  gap: 6px;
+  gap: .6rem;
   max-width: 55%;
   min-width: 0;
 }
@@ -1588,7 +1615,7 @@ html::-webkit-scrollbar-corner,
   display: flex;
   flex: none;
   align-items: center;
-  padding: 3px 5px;
+  padding: .3rem .5rem;
   border: 0;
   border-radius: var(--r-pill);
   background: transparent;
@@ -1650,7 +1677,7 @@ html::-webkit-scrollbar-corner,
 }
 
 .picker--inline select {
-  padding: 4px 26px 4px 12px;
+  padding: .4rem 2.6rem .4rem 1.2rem;
   border-radius: var(--r-control);
   font-size: var(--fs-value);
   letter-spacing: var(--ls-text);
@@ -1662,7 +1689,7 @@ html::-webkit-scrollbar-corner,
 }
 
 .picker--inline .picker__control .lucide {
-  right: 10px;
+  right: 1rem;
   font-size: var(--icon-xs);
 }
 
@@ -1672,7 +1699,7 @@ html::-webkit-scrollbar-corner,
 
 /* What the version list is doing, or why it is empty; gone when it has nothing to say. */
 .candidate__note {
-  margin-top: 8px;
+  margin-top: .8rem;
 }
 
 .candidate__note:empty {
@@ -1714,7 +1741,7 @@ html::-webkit-scrollbar-corner,
 }
 
 .filerow:hover .filerow__go {
-  transform: translateX(4px);
+  transform: translateX(.4rem);
   text-shadow: 0 0 6px rgba(34, 230, 245, 0.7);
 }
 
@@ -1731,7 +1758,7 @@ html::-webkit-scrollbar-corner,
   flex: 1;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 3px 10px;
+  gap: .3rem 1rem;
   min-width: 0;
 }
 
@@ -1786,8 +1813,8 @@ html::-webkit-scrollbar-corner,
 
 /* Cancel, at bar scale and in the danger colour. */
 .runpanel__stop {
-  gap: 6px;
-  padding: 3px 9px;
+  gap: .6rem;
+  padding: .3rem .9rem;
   border-color: var(--danger-dim);
   color: var(--danger);
   font-size: var(--fs-info);
@@ -1814,7 +1841,7 @@ html::-webkit-scrollbar-corner,
 }
 
 .runpanel__stop .submit__label .spinner {
-  margin-right: 6px;
+  margin-right: .6rem;
 }
 
 .runpanel__stop:disabled {
@@ -1920,7 +1947,7 @@ html::-webkit-scrollbar-corner,
 
 /* A status label on a model row. */
 .chip {
-  padding: 3px 9px;
+  padding: .3rem .9rem;
   border: 1px solid var(--line);
   border-radius: var(--r-pill);
   font-size: var(--fs-chip);
@@ -1931,10 +1958,10 @@ html::-webkit-scrollbar-corner,
 
 /* The task's log; contained so appends lay out and paint the box alone. */
 .console {
-  height: clamp(280px, 46vh, 460px);
+  height: clamp(28rem, 46vh, 46rem);
   overflow-y: auto;
   contain: content;
-  padding: 10px 12px;
+  padding: 1rem 1.2rem;
   font-family: "SFMono-Regular", Menlo, Consolas, "Liberation Mono",
     monospace;
   font-size: var(--fs-value);
@@ -1946,7 +1973,7 @@ html::-webkit-scrollbar-corner,
 .shell--run .console {
   height: auto;
   flex: 1 1 auto;
-  min-height: 140px;
+  min-height: 14rem;
 }
 
 /* The context line and the message keep their height; only the console gives up room. */
@@ -1968,7 +1995,7 @@ html::-webkit-scrollbar-corner,
   display: grid;
   contain: layout style;
   grid-template-columns: auto 7.5ch minmax(0, 1fr);
-  column-gap: 12px;
+  column-gap: 1.2rem;
   align-items: baseline;
   padding: 1px 0;
   white-space: pre-wrap;
@@ -2015,8 +2042,8 @@ html::-webkit-scrollbar-corner,
 /* A failed line stays findable when scrolling back. */
 .console__line[data-level="ERROR"],
 .console__line[data-level="CRITICAL"] {
-  margin: 0 -12px;
-  padding: 0 12px;
+  margin: 0 -1.2rem;
+  padding: 0 1.2rem;
   background-color: var(--tint-danger);
 }
 
@@ -2024,7 +2051,7 @@ html::-webkit-scrollbar-corner,
 .console__cursor {
   width: 0.6em;
   height: 1.05em;
-  margin-top: 4px;
+  margin-top: .4rem;
   background-color: var(--cyan);
   opacity: 0.85;
   animation: cursor-blink 1s steps(2, start) infinite;
@@ -2038,7 +2065,7 @@ html::-webkit-scrollbar-corner,
 
 /* The count of lines the row cap trimmed from the top. */
 .console__trimmed {
-  margin: 0 0 4px;
+  margin: 0 0 .4rem;
   text-align: center;
   font-size: var(--fs-chip);
   letter-spacing: var(--ls-text);
@@ -2081,13 +2108,13 @@ html::-webkit-scrollbar-corner,
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: stretch;
-  gap: 22px;
+  gap: 2.2rem;
 }
 
 .model__column {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 2.2rem;
   min-width: 0;
   min-height: 0;
 }
@@ -2123,12 +2150,12 @@ html::-webkit-scrollbar-corner,
 
 .model__actions {
   position: absolute;
-  top: 12px;
+  top: 1.2rem;
   right: 0;
   z-index: 2;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: .8rem;
 }
 
 /* One panel per part of the file: a bar naming it, a body holding its rows. */
@@ -2184,7 +2211,7 @@ html::-webkit-scrollbar-corner,
 }
 
 .scale__cell {
-  padding: 12px;
+  padding: 1.2rem;
   background-color: rgba(2, 14, 20, 0.55);
   text-align: center;
 }
@@ -2200,11 +2227,11 @@ html::-webkit-scrollbar-corner,
 
 .scale__label {
   display: block;
-  margin-top: 4px;
+  margin-top: .4rem;
 }
 
 .mrow__head {
-  gap: 8px;
+  gap: .8rem;
 }
 
 /* The record's own detail under its name. */
@@ -2212,15 +2239,15 @@ html::-webkit-scrollbar-corner,
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 5px 8px;
-  margin-top: 6px;
+  gap: .5rem .8rem;
+  margin-top: .6rem;
 }
 
 /* The status dot in front of an error row. */
 .dot {
   flex: none;
-  width: 7px;
-  height: 7px;
+  width: .7rem;
+  height: .7rem;
   border-radius: 50%;
   background-color: var(--muted);
 }
@@ -2289,13 +2316,13 @@ html::-webkit-scrollbar-corner,
   }
 
   .mpanel__body {
-    max-height: 320px;
+    max-height: 32rem;
   }
 
   .model__actions {
     position: static;
     justify-content: center;
-    margin: 0 0 22px;
+    margin: 0 0 2.2rem;
   }
 }
 
@@ -2321,7 +2348,7 @@ body.body--graph {
 
 .shell--graph .stepper {
   position: fixed;
-  top: 24px;
+  top: 2.4rem;
   left: 0;
   right: 0;
   z-index: 5;
@@ -2362,21 +2389,21 @@ body.body--graph {
 .shell--graph .title,
 .shell--graph .context {
   position: fixed;
-  left: 24px;
+  left: 2.4rem;
   z-index: 5;
-  max-width: calc(100vw - 372px);
+  max-width: calc(100vw - 37.2rem);
   margin: 0;
   text-align: left;
   text-shadow: var(--ink-shadow);
 }
 
 .shell--graph .title {
-  top: 88px;
+  top: 8.8rem;
 }
 
 .shell--graph .context {
   /* The title's line (20px at 1.3) plus the lead gap. */
-  top: calc(88px + 26px + var(--gap-lead));
+  top: calc(8.8rem + 2.6rem + var(--gap-lead));
   justify-content: flex-start;
   overflow: visible;
 }
@@ -2385,8 +2412,8 @@ body.body--graph {
    also cut the halo; padding the halo's reach, taken back by the margin,
    keeps it inside without moving the text. */
 .shell--graph .context__cell {
-  padding: 10px 6px;
-  margin: -10px -6px;
+  padding: 1rem .6rem;
+  margin: -1rem -.6rem;
 }
 
 /* On the graph stage the title is the mode switch: both pictures' names,
@@ -2394,7 +2421,7 @@ body.body--graph {
 .title__toggle {
   display: inline-flex;
   align-items: baseline;
-  gap: 14px;
+  gap: 1.4rem;
 }
 
 .title__option {
@@ -2442,18 +2469,18 @@ body.body--graph {
    title so it holds over the tree. */
 .glegend {
   position: fixed;
-  right: 24px;
-  bottom: 16px;
-  left: 24px;
+  right: 2.4rem;
+  bottom: 1.6rem;
+  left: 2.4rem;
   z-index: 5;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 18px;
+  gap: .6rem 1.8rem;
   margin: 0;
   color: #ffffff;
   font-family: Barlow, sans-serif;
-  font-size: 11px;
+  font-size: 1.1rem;
   line-height: 1.35;
   text-shadow: var(--ink-shadow);
 }
@@ -2469,7 +2496,7 @@ body.body--graph {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 16px;
+  gap: .4rem 1.6rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -2478,7 +2505,7 @@ body.body--graph {
 .glegend__icons li {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: .6rem;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -2488,14 +2515,14 @@ body.body--graph {
 .glegend__icons .lucide,
 .glegend__mark {
   flex: none;
-  font-size: 14px;
+  font-size: 1.4rem;
   line-height: 1;
   color: var(--cyan);
 }
 
 .glegend__help {
   margin-left: auto;
-  padding-left: 18px;
+  padding-left: 1.8rem;
   box-shadow: inset 1px 0 0 rgba(34, 230, 245, 0.16);
   color: #ffffff;
   white-space: nowrap;
@@ -2505,15 +2532,15 @@ body.body--graph {
 .glegend__help li {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: .4rem;
 }
 
 .glegend__mark {
-  font-size: 11px;
+  font-size: 1.1rem;
 }
 
 .glegend__mark + .glegend__mark {
-  margin-left: -4px;
+  margin-left: -.4rem;
 }
 
 /* The hardware view's lines in the legend as they are drawn: a network is
@@ -2526,13 +2553,13 @@ body.body--graph {
 }
 
 .glegend__swatch--bus {
-  width: 18px;
+  width: 1.8rem;
   height: 2px;
 }
 
 .glegend__swatch--link {
   width: 2px;
-  height: 12px;
+  height: 1.2rem;
 }
 
 /* The search panel (req 43) in the stage's top right corner: a field,
@@ -2540,26 +2567,26 @@ body.body--graph {
    console's: deep teal glass in a dim cyan frame, cyan accents, white names. */
 .gsearch {
   position: fixed;
-  top: 88px;
-  right: 24px;
+  top: 8.8rem;
+  right: 2.4rem;
   z-index: 5;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: .8rem;
   box-sizing: border-box;
-  width: 300px;
+  width: 30rem;
   /* Stops short of the legend line along the bottom edge (16px up, one
      line of 15px, and the same 16px clear above it). */
-  max-height: calc(100vh - 88px - 47px);
+  max-height: calc(100vh - 8.8rem - 4.7rem);
   margin: 0;
-  padding: 10px 14px 11px;
+  padding: 1rem 1.4rem 1.1rem;
   overflow: hidden;
   border: 1px solid var(--glass-line);
-  border-radius: 8px;
+  border-radius: .8rem;
   box-shadow: var(--glass-shadow);
   color: #ffffff;
   font-family: Barlow, sans-serif;
-  font-size: 12px;
+  font-size: 1.2rem;
   line-height: 1.35;
 }
 
@@ -2605,10 +2632,10 @@ body.body--graph {
   flex: none;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: .8rem;
   box-sizing: border-box;
-  min-height: 34px;
-  padding: 6px 10px;
+  min-height: 3.4rem;
+  padding: .6rem 1rem;
   border: 1px solid var(--cyan-dim);
   border-radius: var(--r-control);
   background-color: rgba(2, 14, 22, 0.7);
@@ -2678,13 +2705,13 @@ body.body--graph {
   flex: none;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: .6rem;
 }
 
 .gsearch__chip {
-  padding: 3px 9px;
+  padding: .3rem .9rem;
   border: 1px solid rgba(34, 230, 245, 0.28);
-  border-radius: 4px;
+  border-radius: .4rem;
   background-color: rgba(8, 36, 52, 0.85);
   color: rgba(205, 240, 248, 0.85);
   font: inherit;
@@ -2723,8 +2750,8 @@ body.body--graph {
 .gsearch__results {
   flex: 1 1 auto;
   min-height: 0;
-  margin: 0 -14px -11px;
-  padding: 0 8px 8px;
+  margin: 0 -1.4rem -1.1rem;
+  padding: 0 .8rem .8rem;
   overflow-y: auto;
 }
 
@@ -2739,9 +2766,9 @@ body.body--graph {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: 6px;
+  gap: .8rem;
+  padding: .6rem .8rem;
+  border-radius: .6rem;
   cursor: pointer;
   color: #ffffff;
   transition: background-color var(--t), box-shadow var(--t);
@@ -2772,17 +2799,17 @@ body.body--graph {
 
 /* A copy line: the CSU listing an entity, indented under it. */
 .gsearch__row--copy {
-  padding-left: 30px;
+  padding-left: 3rem;
 }
 
 .gsearch__glyph {
   flex: none;
-  font-size: 14px;
+  font-size: 1.4rem;
   color: var(--cyan);
 }
 
 .gsearch__row--copy .gsearch__glyph {
-  font-size: 12px;
+  font-size: 1.2rem;
 }
 
 .gsearch__text {
@@ -2793,7 +2820,7 @@ body.body--graph {
 
 .gsearch__label {
   overflow: hidden;
-  font-size: 12px;
+  font-size: 1.2rem;
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2801,7 +2828,7 @@ body.body--graph {
 
 .gsearch__path {
   overflow: hidden;
-  font-size: 10px;
+  font-size: 1rem;
   letter-spacing: 0.02em;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2811,7 +2838,7 @@ body.body--graph {
 .gsearch__kind {
   flex: none;
   margin-left: auto;
-  padding: 2px 8px;
+  padding: 2px .8rem;
   border: 1px solid var(--cyan-dim);
   border-radius: var(--r-pill);
   background-color: rgba(2, 14, 22, 0.6);
@@ -2849,6 +2876,11 @@ body.body--graph {
 }
 
 /* ------------------------------------------------ buses */
+
+/* From here to the hover cards: the markup of G6 HTML nodes, drawn inside
+   the canvas transform. graph.js lays the boxes out in these design px and
+   zooms the whole picture by the root scale (uiScale), so the values stay
+   px and mirror graph.js's constants. */
 
 /* A network of the hardware view (a G6 HTML node): its name over the left
    end of the glowing line that runs across the stage. The node is
@@ -3158,17 +3190,17 @@ body.body--graph {
 .graph__canvas .tooltip {
   overflow: hidden;
   border: 1px solid var(--glass-line) !important;
-  border-radius: 8px !important;
+  border-radius: .8rem !important;
   background: none !important;
   z-index: 10 !important;
   box-shadow: var(--glass-shadow) !important;
   color: #ffffff !important;
   font-family: Barlow, sans-serif !important;
-  font-size: 11.5px !important;
+  font-size: 1.15rem !important;
   line-height: 1.35 !important;
   min-width: 0 !important;
-  max-width: 320px !important;
-  padding: 9px 12px 10px !important;
+  max-width: 32rem !important;
+  padding: .9rem 1.2rem 1rem !important;
 }
 
 /* The text over the glass. */
@@ -3183,7 +3215,7 @@ body.body--graph {
   top: 0;
   left: 0;
   z-index: 10;
-  max-width: 320px;
+  max-width: 32rem;
   pointer-events: none;
 }
 
@@ -3193,10 +3225,10 @@ body.body--graph {
 .tip__title {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  margin: 0 0 7px;
+  gap: .8rem;
+  margin: 0 0 .7rem;
   min-width: 0;
-  font-size: 13px;
+  font-size: 1.3rem;
   font-weight: 600;
   letter-spacing: 0.01em;
   overflow-wrap: anywhere;
@@ -3206,7 +3238,7 @@ body.body--graph {
 .tip__kind {
   flex: none;
   margin-left: auto;
-  padding: 2px 8px;
+  padding: 2px .8rem;
   border: 1px solid var(--cyan-dim);
   border-radius: var(--r-pill);
   background-color: rgba(2, 14, 22, 0.6);
@@ -3226,16 +3258,16 @@ body.body--graph {
    breaking inside a word when it has no spaces. */
 .tip__rows {
   display: grid;
-  grid-template-columns: minmax(auto, 96px) minmax(0, 1fr);
-  gap: 3px 12px;
+  grid-template-columns: minmax(auto, 9.6rem) minmax(0, 1fr);
+  gap: .3rem 1.2rem;
   margin: 0;
-  padding-top: 7px;
+  padding-top: .7rem;
   border-top: 1px solid rgba(34, 230, 245, 0.16);
 }
 
 .tip__rows dt {
   align-self: center;
-  font-size: 9.5px;
+  font-size: .95rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(185, 228, 238, 0.75);

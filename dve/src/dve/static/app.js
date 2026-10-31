@@ -2118,46 +2118,45 @@
     el.graphLegend.setAttribute("data-mode", state.graphMode);
   }
 
-  // The stage's title is the mode switch: both pictures' names, the one on
-  // show bright and the other dimmed, each a button. Built with DOM calls,
-  // as the header otherwise sets text only.
+  // The stage's title is the model deck's; a segmented switch beside it
+  // picks the picture. Built with DOM calls, as the header otherwise sets
+  // text only.
   function renderGraphTitle() {
     renderHeader({ title: "" });
-    // An empty title falls back to the product's name; the switch takes its place.
+    // An empty title falls back to the product's name; the row takes its place.
     el.title.textContent = "";
+    var row = document.createElement("span");
+    row.className = "title__row";
+    var word = document.createElement("span");
+    word.className = "title__word";
+    word.textContent = "Core System Model";
+    row.appendChild(word);
     var group = document.createElement("span");
-    group.className = "title__toggle";
+    group.className = "modeswitch";
     group.setAttribute("role", "group");
     group.setAttribute("aria-label", "View mode");
-    ["sw", "hw"].forEach(function (mode, i) {
-      if (i) {
-        var dot = document.createElement("span");
-        dot.className = "title__dot";
-        dot.setAttribute("aria-hidden", "true");
-        // Swap arrows: the two words trade places.
-        dot.textContent = "\u21c4";
-        group.appendChild(dot);
-      }
+    ["sw", "hw"].forEach(function (mode) {
       var on = mode === state.graphMode;
       var option = document.createElement("button");
       option.type = "button";
-      option.className = "title__option";
+      option.className = "modeswitch__option";
       option.setAttribute("data-mode", mode);
       option.setAttribute("aria-pressed", on ? "true" : "false");
       option.title = on ? GRAPH_TITLES[mode] + " view, on show" : "Show the " + GRAPH_TITLES[mode].toLowerCase() + " view";
       option.textContent = GRAPH_TITLES[mode];
       group.appendChild(option);
     });
-    el.title.appendChild(group);
+    row.appendChild(group);
+    el.title.appendChild(row);
   }
 
   function wireGraph() {
     DsmHierarchyGraph.mount(el.graphCanvas, el.graphSearch);
     // The model card's way on to the view step (req 43).
     el.modelView.addEventListener("click", enterGraph);
-    // The title's dimmed word redraws the loaded model as that picture.
+    // The switch's other segment redraws the loaded model as that picture.
     el.title.addEventListener("click", function (event) {
-      var option = event.target.closest ? event.target.closest(".title__option") : null;
+      var option = event.target.closest ? event.target.closest(".modeswitch__option") : null;
       var mode = option && option.getAttribute("data-mode");
       // No change while a picture is still being drawn: two renders would overlap.
       if (!mode || mode === state.graphMode || state.view !== "graph" || !el.graphLoading.hidden) {

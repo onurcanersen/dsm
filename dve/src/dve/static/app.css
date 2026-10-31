@@ -29,6 +29,8 @@
   /* The graph stage's glass panels, search and hover cards (req 43): rim and lift. */
   --glass-line: rgba(34, 230, 245, 0.42);
   --glass-shadow: 0 10px 30px rgba(0, 8, 14, 0.55), 0 0 18px rgba(34, 230, 245, 0.14), inset 0 1px 0 rgba(34, 230, 245, 0.18);
+  /* The shade down the top of every page, 26rem tall: the page's ink fading out over the picture. */
+  --top-shade: linear-gradient(to bottom, rgba(2, 16, 26, 0.88) 0, rgba(2, 16, 26, 0.72) 9rem, rgba(2, 16, 26, 0.4) 17rem, rgba(2, 16, 26, 0) 100%);
   /* The ink of text floating over the tree: a tight dark edge under a wider halo. */
   --ink-shadow: 0 0 2px #02101a, 0 0 2px #02101a, 0 1px 3px #02101a, 0 0 10px rgba(2, 16, 26, 0.9);
 
@@ -134,6 +136,26 @@ body {
   overflow-x: clip;
 }
 
+/* A shade down the top of every page, behind the header line, the stepper
+   and the card: the page's ink fading out over the picture. Under the
+   content (the body isolates, so -1 stays over its own background) and
+   clear of the pointer. */
+body {
+  isolation: isolate;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: -1;
+  height: 26rem;
+  pointer-events: none;
+  background: var(--top-shade);
+}
+
 /* The run deck alone sits on the open sea: the ship stands beside its
    console as an image of its own (bg-sea-blur.jpeg is bg-sea.jpeg blurred
    the same way as bg-blur.jpeg). */
@@ -231,6 +253,17 @@ html::-webkit-scrollbar-corner,
   gap: 2.2rem;
   width: var(--w-list);
   margin: auto;
+  /* The room the stepper took in the shell before it went to the header
+     line: its height (4.7rem) and the gap under it. Kept, so the centred
+     cards sit where they did and the stretched decks start under it. */
+  padding-top: 6.9rem;
+}
+
+/* The stepper drops under the header bars on narrow screens (see .stepper). */
+@media (max-width: 800px) {
+  .shell {
+    padding-top: 12.3rem;
+  }
 }
 
 /* Brand (left) and session (right) share one header line: same inset, same
@@ -380,13 +413,34 @@ html::-webkit-scrollbar-corner,
 }
 
 /* Stepper: completed stages green, the current one cyan, the rest muted. */
+/* The stepper rides the header line on every page, centred between the
+   brand and the session, over the card (z 5 with the bars); only its
+   buttons take the pointer, the rest of the line falls through. */
 .stepper {
+  position: fixed;
+  top: 2.4rem;
+  right: 0;
+  left: 0;
+  z-index: 5;
   display: flex;
   justify-content: center;
-  align-self: center;
   margin: 0;
   padding: 0;
   list-style: none;
+  pointer-events: none;
+}
+
+.stepper__button {
+  pointer-events: auto;
+}
+
+/* Under 800px the line cannot hold the brand, the seven steps and the
+   session: the stepper drops under the bars, and the stretched decks
+   below give it the room. */
+@media (max-width: 800px) {
+  .stepper {
+    top: 7.8rem;
+  }
 }
 
 .stepper__item {
@@ -2394,27 +2448,14 @@ html::-webkit-scrollbar-corner,
   width: 100%;
   align-self: stretch;
   margin: 0;
+  padding: 0;
   gap: 0;
 }
 
-/* The whole page goes to the canvas; the stepper floats over it on the
-   header line, taking the pointer only on its buttons. */
+/* The whole page goes to the canvas, under the stepper on the header line. */
 body.body--graph {
   padding: 0;
   background-image: url("img/bg-blur.jpeg");
-}
-
-.shell--graph .stepper {
-  position: fixed;
-  top: 2.4rem;
-  left: 0;
-  right: 0;
-  z-index: 5;
-  pointer-events: none;
-}
-
-.shell--graph .stepper__button {
-  pointer-events: auto;
 }
 
 /* The frame goes with the model deck's; the border too, so the stage
@@ -2441,9 +2482,28 @@ body.body--graph {
   position: relative;
 }
 
+/* On the graph stage the page's shade would stay under the canvas, so the
+   view draws its own over it: under the fixed stepper, title and context
+   line (z 5), so a tree panned up behind them stays dim enough to read
+   them. The pointer falls through to the canvas. */
+body.body--graph::before {
+  display: none;
+}
+
+.shell--graph #view-graph::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 4;
+  height: 26rem;
+  pointer-events: none;
+  background: var(--top-shade);
+}
+
 /* The title and the context line (req 4, 16) float on the stage's left
-   under the stepper, clear of the search panel. Inked in, since the tree
-   can run under them. */
+   under the stepper, clear of the search panel, over the top shade. */
 .shell--graph .title,
 .shell--graph .context {
   position: fixed;
@@ -2452,7 +2512,6 @@ body.body--graph {
   max-width: calc(100vw - 37.2rem);
   margin: 0;
   text-align: left;
-  text-shadow: var(--ink-shadow);
 }
 
 .shell--graph .title {
@@ -2466,52 +2525,54 @@ body.body--graph {
   overflow: visible;
 }
 
-/* The context cells clip to their own box for the ellipsis, which would
-   also cut the halo; padding the halo's reach, taken back by the margin,
-   keeps it inside without moving the text. */
-.shell--graph .context__cell {
-  padding: 1rem .6rem;
-  margin: -1rem -.6rem;
-}
-
-/* On the graph stage the title is the mode switch: both pictures' names,
-   the one on show bright, the other dimmed until hovered, each a button. */
-.title__toggle {
+/* On the graph stage the title carries a segmented switch for the picture
+   on show: two chips in one rim, in the search panel's chip language, the
+   one on show lit. */
+.title__row {
   display: inline-flex;
-  align-items: baseline;
-  gap: 1.4rem;
+  align-items: center;
+  gap: 1.6rem;
 }
 
-.title__option {
+.modeswitch {
+  display: inline-flex;
+  padding: .2rem;
+  border: 1px solid rgba(34, 230, 245, 0.28);
+  border-radius: var(--r-pill);
+  background-color: rgba(8, 36, 52, 0.85);
+  font-family: Barlow, sans-serif;
+  font-size: var(--fs-chip);
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: var(--ls-tight);
+  text-transform: uppercase;
+  text-shadow: none;
+}
+
+.modeswitch__option {
   margin: 0;
-  padding: 0;
+  padding: .3rem 1rem;
   border: 0;
-  background: none;
-  color: rgba(223, 238, 242, 0.42);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--muted);
   font: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
-  /* Inked in like the context line under it, whichever word is on show. */
-  text-shadow: var(--ink-shadow);
   cursor: pointer;
-  transition: color var(--t);
+  transition: color var(--t), background-color var(--t), box-shadow var(--t);
 }
 
 /* Hovered like the page's other text controls (.linkbtn, .reveal, the chips). */
-.title__option:hover {
+.modeswitch__option:hover {
   color: var(--cyan);
 }
 
-.title__option[aria-pressed="true"] {
-  color: #ffffff;
+.modeswitch__option[aria-pressed="true"] {
+  color: var(--cyan);
+  background-color: var(--tint-cyan-strong);
+  box-shadow: 0 0 8px rgba(34, 230, 245, 0.25), inset 0 0 0 1px var(--cyan-dim);
   cursor: default;
-}
-
-/* The swap arrows between the words, from Barlow since Orbitron has none. */
-.title__dot {
-  font-family: Barlow, sans-serif;
-  font-size: 0.85em;
-  color: rgba(34, 230, 245, 0.7);
 }
 
 /* The chips and legend items of the other mode stay out of sight. */
@@ -2650,6 +2711,23 @@ body.body--graph {
 
 .gsearch[hidden] {
   display: none;
+}
+
+/* Under 800px the stepper sits under the header bars (5.4rem lower), so the
+   title, the context line and the search panel step down with it. */
+@media (max-width: 800px) {
+  .shell--graph .title,
+  .gsearch {
+    top: 14.2rem;
+  }
+
+  .shell--graph .context {
+    top: calc(14.2rem + 2.6rem + var(--gap-lead));
+  }
+
+  .gsearch {
+    max-height: calc(100vh - 14.2rem - 4.7rem);
+  }
 }
 
 /* The glass of the search panel and the hover cards: the fixed pre-blurred
@@ -3241,6 +3319,24 @@ body.body--graph {
   text-shadow: 0 0 6px rgba(255, 209, 102, 0.6);
 }
 
+/* And the scrollbar of its long list: the gold over a gold track, in place
+   of the page's cyan (see the scrollbars section at the top). */
+.box--highlight .list--scroll {
+  scrollbar-color: var(--mark-dim) var(--tint-mark);
+}
+
+.box--highlight .list--scroll::-webkit-scrollbar-track {
+  background-color: var(--tint-mark);
+}
+
+.box--highlight .list--scroll::-webkit-scrollbar-thumb {
+  background-color: var(--mark-dim);
+}
+
+.box--highlight .list--scroll::-webkit-scrollbar-thumb:hover {
+  background-color: var(--mark);
+}
+
 /* The hover cards showing attributes (req 43), G6's for boxes and the
    page's own for rows: the search panel's teal glass with a cyan rim. G6
    writes its defaults inline, so each is overridden with !important to
@@ -3346,7 +3442,7 @@ body.body--graph {
 .source__tile:focus-visible,
 .filerow:focus-visible,
 .stepper__button:focus-visible,
-.title__option:focus-visible,
+.modeswitch__option:focus-visible,
 .linkbtn:focus-visible,
 .reveal:focus-visible,
 .console:focus-visible,

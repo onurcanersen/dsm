@@ -180,6 +180,9 @@
     if (state.view === "inventory" && name !== "inventory") {
       unitScroll = el.unitList.scrollTop;
     }
+    if (name !== state.view) {
+      playCardIn();
+    }
     state.view = name;
     VIEWS.forEach(function (view) {
       $("view-" + view).hidden = view !== name;
@@ -208,6 +211,13 @@
       focusTarget.focus();
     }
     saveUserState();
+  }
+
+  // Every change of view plays the card's entrance; a change mid-flight restarts it.
+  function playCardIn() {
+    el.card.classList.remove("card--in");
+    void el.card.offsetWidth;
+    el.card.classList.add("card--in");
   }
 
   function renderStepper(name) {
@@ -2462,5 +2472,10 @@
   wireSelect();
   wireInventory();
   wireRun();
+  el.card.addEventListener("animationend", function (event) {
+    if (event.target === el.card) {
+      el.card.classList.remove("card--in");
+    }
+  });
   boot();
 })();

@@ -551,6 +551,29 @@ html::-webkit-scrollbar-corner,
   padding: var(--card-pad);
 }
 
+/* The card's entrance on every change of view: a fade with a short rise. The rise uses the
+   relative offset, not a transform: a transform would break the frosted fill's fixed attachment
+   and re-crop the background copy while the card moves. */
+.card--in {
+  animation: card-in .3s ease-out both;
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    top: .6rem;
+  }
+  to {
+    top: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card--in {
+    animation-duration: 1ms;
+  }
+}
+
 .card[data-view="boot"],
 .card[data-view="login"] {
   width: var(--w-signin);
@@ -1525,8 +1548,60 @@ html::-webkit-scrollbar-corner,
   min-height: 0;
 }
 
-.card[data-view="boot"] .empty {
-  padding: .6rem 0 2px;
+/* Boot: no card while GET /api/session answers, just three dots pulsing on the background. */
+.card[data-view="boot"] {
+  width: auto;
+  padding: 0;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.card[data-view="boot"]::before,
+.card[data-view="boot"]::after,
+.card[data-view="boot"] .card__blur,
+.card[data-view="boot"] .card__corners,
+.card[data-view="boot"] .title,
+.card[data-view="boot"] .subtitle {
+  display: none;
+}
+
+/* A wide, shapeless dark halo behind the row lifts it off the wireframe; no edge, no box. */
+.boot {
+  position: relative;
+  display: flex;
+  gap: 1rem;
+  margin: 0;
+}
+
+.boot::before {
+  content: "";
+  position: absolute;
+  inset: -16rem -22rem;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(2, 16, 26, 0.92), rgba(2, 16, 26, 0.7) 40%, rgba(2, 16, 26, 0));
+  pointer-events: none;
+}
+
+.boot > span {
+  position: relative;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 50%;
+  background-color: var(--cyan);
+  animation: boot-dot 1.2s ease-in-out infinite;
+}
+
+.boot > span:nth-child(2) {
+  animation-delay: .2s;
+}
+
+.boot > span:nth-child(3) {
+  animation-delay: .4s;
+}
+
+@keyframes boot-dot {
+  0%, 60%, 100% { opacity: .25; }
+  30% { opacity: 1; }
 }
 
 #model-loading {

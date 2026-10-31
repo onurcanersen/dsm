@@ -1027,23 +1027,6 @@ html::-webkit-scrollbar-corner,
   box-shadow: none;
 }
 
-/* The bar a finished run hands over, in the page's green. */
-.submit--ok {
-  border-color: var(--ok);
-  background-color: var(--tint-ok);
-  color: var(--ok);
-}
-
-.submit--ok:hover:not(:disabled) {
-  background-color: var(--ok);
-  color: #04220f;
-  box-shadow: var(--glow-ok);
-}
-
-.submit--ok:disabled {
-  border-color: var(--ok-dim);
-}
-
 .spinner {
   display: inline-block;
   width: 1.3rem;

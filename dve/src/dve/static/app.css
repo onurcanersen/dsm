@@ -636,7 +636,7 @@ html::-webkit-scrollbar-corner,
 /* One height for the cards that differ in content, so the card does not resize between stages. */
 .card[data-view="sources"] .card__body,
 .card[data-view="select"] .card__body,
-.card[data-view="inventory"] .card__body,
+.card[data-view="units"] .card__body,
 .card[data-view="files"] .card__body {
   min-height: 26.8rem;
 }
@@ -797,7 +797,7 @@ html::-webkit-scrollbar-corner,
   color: var(--cyan);
 }
 
-.card[data-view="inventory"],
+.card[data-view="units"],
 .card[data-view="files"] {
   width: var(--w-list);
 }

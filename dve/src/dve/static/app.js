@@ -64,7 +64,7 @@
     login: { logo: true, subtitle: "Secure Access" },
     sources: { title: "Data Sources", icon: "lucide-hard-drive", subtitle: "Select a source to enter its credentials" },
     select: { title: "Project Context", icon: "lucide-network", subtitle: "Choose the project, platform and system version" },
-    inventory: {
+    units: {
       title: "Software Unit Inventory",
       icon: "lucide-package",
       subtitle: "Select candidate versions, or produce with no change"
@@ -83,7 +83,7 @@
   var PRODUCT_TITLE = "Digital System Model";
 
   // The stepper's stages, in order; boot and sign-in have none.
-  var STAGES = ["sources", "select", "files", "inventory", "run", "model", "graph"];
+  var STAGES = ["sources", "select", "files", "units", "run", "model", "graph"];
 
   var VIEWS = ["boot", "login"].concat(STAGES);
 
@@ -177,7 +177,7 @@
   /* --------------------------------------------------------------- views */
 
   function showView(name) {
-    if (state.view === "inventory" && name !== "inventory") {
+    if (state.view === "units" && name !== "units") {
       unitScroll = el.unitList.scrollTop;
     }
     if (name !== state.view) {
@@ -680,6 +680,10 @@
    * looked up in the listing rather than trusted. */
   function resumeCard() {
     var saved = state.ui || {};
+    // The units stage was named "inventory" in records saved before 2026-11-01.
+    if (saved.view === "inventory") {
+      saved.view = "units";
+    }
     if (saved.view === "sources") {
       return enterSources();
     }
@@ -698,10 +702,10 @@
         if (saved.view === "graph" && state.modelFile) {
           return enterGraph();
         }
-        return saved.view === "inventory" ? enterInventory() : enterFiles();
+        return saved.view === "units" ? enterInventory() : enterFiles();
       });
     }
-    if (saved.view === "inventory") {
+    if (saved.view === "units") {
       return enterInventory();
     }
     if (saved.view === "files") {
@@ -855,9 +859,9 @@
   var unitScroll = 0;
 
   function enterInventory() {
-    setMessage("inventory", null, "");
+    setMessage("units", null, "");
     renderUnits(allUnits);
-    showView("inventory");
+    showView("units");
     el.unitList.scrollTop = unitScroll;
     return loadUnits()
       .then(function (units) {
@@ -870,7 +874,7 @@
           return;
         }
         renderUnits([]);
-        setMessage("inventory", "error", error.message);
+        setMessage("units", "error", error.message);
       });
   }
 
@@ -1139,7 +1143,7 @@
       return versionReads[unitName];
     }
     // A failed read reports in the card's message strip, like any other error.
-    setMessage("inventory", null, "");
+    setMessage("units", null, "");
     versionReads[unitName] = request("GET", unitVersionsUrl(unitName))
       .then(function (payload) {
         candidateVersions[unitName] = payload.versions || [];
@@ -1147,7 +1151,7 @@
       .catch(function (error) {
         if (!handleExpired(error)) {
           candidateVersions[unitName] = null;
-          setMessage("inventory", "error", error.message);
+          setMessage("units", "error", error.message);
         }
       })
       .then(function () {
@@ -2333,7 +2337,7 @@
     var enter = {
       sources: enterSources,
       files: enterFiles,
-      inventory: enterInventory,
+      units: enterInventory,
       run: enterProduce,
       model: enterModel,
       graph: enterGraph
@@ -2450,7 +2454,7 @@
     el.unitFilter.addEventListener("input", drawUnits);
 
     // A tracked run is re-attached to; otherwise a new one is submitted.
-    el.inventoryNext.addEventListener("click", function () {
+    el.unitsNext.addEventListener("click", function () {
       if (state.activeTask) {
         enterRunConsole();
       } else {

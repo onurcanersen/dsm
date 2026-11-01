@@ -87,13 +87,13 @@
             <span class="stepper__name">Files</span>
           </button>
         </li>
-        <li class="stepper__item" id="stepper-inventory" data-state="todo">
-          <button type="button" class="stepper__button" data-stage="inventory">
+        <li class="stepper__item" id="stepper-units" data-state="todo">
+          <button type="button" class="stepper__button" data-stage="units">
             <span class="stepper__mark">
               <i class="lucide lucide-check"></i>
               <span class="stepper__num">4</span>
             </span>
-            <span class="stepper__name">Inventory</span>
+            <span class="stepper__name">Units</span>
           </button>
         </li>
         <li class="stepper__item" id="stepper-run" data-state="todo">
@@ -294,7 +294,7 @@
           </section>
 
           <!-- Software Unit Version Inventory (SRS DSM-MDG req 10); each row's dropdown picks a candidate version (req 11). -->
-          <section class="view" id="view-inventory" hidden>
+          <section class="view" id="view-units" hidden>
             <div class="units">
               <label class="units__search">
                 <i class="lucide lucide-search"></i>
@@ -315,10 +315,10 @@
             </div>
 
             <p class="candidate__note" id="candidate-note" role="status"></p>
-            <p class="message" id="inventory-message" role="alert"></p>
+            <p class="message" id="units-message" role="alert"></p>
 
             <div class="actions">
-              <button type="button" class="submit" id="inventory-next">
+              <button type="button" class="submit" id="units-next">
                 <span class="submit__label">Produce data</span
                 ><i class="lucide lucide-arrow-right submit__arrow"></i>
               </button>

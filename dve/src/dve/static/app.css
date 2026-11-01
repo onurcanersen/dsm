@@ -1602,7 +1602,7 @@ html::-webkit-scrollbar-corner,
   display: none;
 }
 
-/* A wide, shapeless dark halo behind the row lifts it off the wireframe; no edge, no box. */
+/* A soft, shapeless dark halo behind the row lifts it off the wireframe; no edge, no box. */
 .boot {
   position: relative;
   display: flex;
@@ -1613,9 +1613,9 @@ html::-webkit-scrollbar-corner,
 .boot::before {
   content: "";
   position: absolute;
-  inset: -16rem -22rem;
+  inset: -8rem -11rem;
   border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(2, 16, 26, 0.92), rgba(2, 16, 26, 0.7) 40%, rgba(2, 16, 26, 0));
+  background: radial-gradient(closest-side, rgba(2, 16, 26, 0.55), rgba(2, 16, 26, 0.3) 40%, rgba(2, 16, 26, 0));
   pointer-events: none;
 }
 
@@ -2960,7 +2960,8 @@ body.body--graph::before {
   isolation: auto !important;
 }
 
-/* Over the canvas while the file is read or drawn: the spinner alone, no veil. */
+/* Over the canvas while the file is read or a picture is drawn (on every
+   switch between the views too): the boot screen's three dots, no veil. */
 .graph__stage > .empty {
   position: absolute;
   inset: 0;
@@ -3052,10 +3053,11 @@ body.body--graph::before {
 
 /* A server cabinet of the hardware view (its own HTML node, drawn under
    the group's units): the software view's box as a frame, the same 2px
-   glowing cyan rim, radius and glass, with its own head along the top (the
-   group's name in caps, a pill with the unit count, a rule beneath) and a
-   rail of mounting holes down each side. Its back is near-opaque,
-   so the taps the units drop stay hidden until they leave its foot. The
+   glowing cyan rim, radius and glass gradient, with its own head along
+   the top (the group's name in caps, a pill with the unit count in the
+   page's kind-pill language, a rule beneath) and a rail of mounting holes
+   down each side. Its back is near-opaque under the gradient, so the taps
+   the units drop stay hidden until they leave its foot. The
    head's heights (--rule to its rule, --head to the first unit) and the
    rails' width (--rail) come in as CSS variables from graph.js. */
 .rack {
@@ -3066,7 +3068,7 @@ body.body--graph::before {
   border: 2px solid rgba(34, 230, 245, 0.8);
   border-radius: 8px;
   background-color: rgba(6, 26, 36, 0.92);
-  background-image: linear-gradient(180deg, rgba(120, 240, 255, 0.12), rgba(8, 60, 80, 0.28));
+  background-image: linear-gradient(180deg, rgba(120, 240, 255, 0.16), rgba(8, 60, 80, 0.3));
   box-shadow: 0 0 10px rgba(34, 230, 245, 0.45), 0 0 2px rgba(34, 230, 245, 0.8), inset 0 0 12px rgba(34, 230, 245, 0.14);
   color: #ffffff;
   font-family: Barlow, sans-serif;
@@ -3110,12 +3112,13 @@ body.body--graph::before {
 .rack__count {
   flex: none;
   padding: 2px 8px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--cyan-dim);
   border-radius: var(--r-pill);
+  background-color: rgba(2, 14, 22, 0.6);
   font-size: 10px;
   letter-spacing: 0.1em;
   line-height: 1.2;
-  color: var(--muted);
+  color: var(--cyan);
   white-space: nowrap;
   text-transform: uppercase;
 }
@@ -3144,44 +3147,18 @@ body.body--graph::before {
 }
 
 /* A node with a display, drawn outside the cabinet as a console: the
-   cabinet's own rim (the software box's 2px glowing cyan frame and radius)
-   on the unit's glass, no lamp. The hover and find states keep the card's
-   colours on the rim. */
-.box.box--console {
-  border: 2px solid rgba(34, 230, 245, 0.8);
-  border-radius: 8px;
-  background-color: rgba(2, 16, 26, 0.55);
-  background-image: linear-gradient(180deg, rgba(120, 240, 255, 0.1), rgba(8, 60, 80, 0.2));
-  box-shadow: 0 0 10px rgba(34, 230, 245, 0.45), 0 0 2px rgba(34, 230, 245, 0.8), inset 0 0 12px rgba(34, 230, 245, 0.14);
-}
+   software view's box itself, one glass, rim, hover and find, with a
+   monitor glyph in place of a server's and no lamp. */
 
-.box.box--console .box__head {
-  height: 40px;
-}
-
-.box.box--console.box--active {
-  border-color: #ffffff;
-  background-color: #123a4a;
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.1));
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.45), 0 0 2px #ffffff;
-}
-
-.box.box--console.box--highlight {
-  border-color: var(--mark);
-  background-color: #3a2e10;
-  background-image: linear-gradient(180deg, rgba(255, 209, 102, 0.18), rgba(0, 0, 0, 0.15));
-  box-shadow: 0 0 10px var(--mark-dim), 0 0 2px var(--mark);
-}
-
-/* A node drawn in a cabinet, as a rack unit: a smaller box in the same
-   glass, a 1px rim, edge to edge between the rails, a status lamp at the
-   end of its front. The hover and find states keep the card's colours on
-   the rim and lamp. */
+/* A node drawn in a cabinet, as a rack unit: the box's glass in a 1px
+   rim, radius 6, no glow of its own (the cabinet glows), edge to edge
+   between the rails, a status lamp at the end of its front. The hover and
+   find states are the box's, their glow drawn in since the units stand
+   3px apart; the lamp follows the glyph, white under the pointer and gold
+   on the find. */
 .box.box--unit {
   border: 1px solid rgba(34, 230, 245, 0.55);
   border-radius: 6px;
-  background-color: rgba(2, 16, 26, 0.55);
-  background-image: linear-gradient(180deg, rgba(120, 240, 255, 0.1), rgba(8, 60, 80, 0.2));
   box-shadow: none;
 }
 
@@ -3208,17 +3185,16 @@ body.body--graph::before {
 }
 
 .box.box--unit.box--active {
-  border-color: #ffffff;
-  background-color: #123a4a;
-  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.1));
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.45), 0 0 2px #ffffff, inset 0 0 10px rgba(34, 230, 245, 0.3);
+}
+
+.box.box--unit.box--active .box__head::after {
+  background: #ffffff;
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
 }
 
 .box.box--unit.box--highlight {
-  border-color: var(--mark);
-  background-color: #3a2e10;
-  background-image: linear-gradient(180deg, rgba(255, 209, 102, 0.18), rgba(0, 0, 0, 0.15));
-  box-shadow: 0 0 8px var(--mark-dim);
+  box-shadow: 0 0 0 1px var(--mark-dim), 0 0 12px rgba(255, 209, 102, 0.5), inset 0 0 12px rgba(255, 209, 102, 0.16);
 }
 
 .box.box--unit.box--highlight .box__head::after {
@@ -3339,11 +3315,16 @@ body.body--graph::before {
   flex: none;
 }
 
+/* A row hangs from a rail down the list's left, branching off it round
+   a corner like the graph's own list rows leave their trunk (a CSC to its
+   CSUs). The rail is drawn by the rows, a segment each, so it scrolls with
+   a long list: from the head's rule to the last row's branch. */
 .list__row {
+  position: relative;
   display: flex;
   align-items: center;
   height: 26px;
-  padding: 0 10px;
+  padding: 0 10px 0 26px;
   border-radius: 4px;
   font-size: 11.5px;
   letter-spacing: 0.02em;
@@ -3352,8 +3333,41 @@ body.body--graph::before {
   transition: background-color var(--t), color var(--t);
 }
 
-.list__row + .list__row {
-  border-top: 1px solid rgba(34, 230, 245, 0.14);
+.list__row::before,
+.list__row::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  pointer-events: none;
+}
+
+/* The rail: straight through every row but the last. */
+.list__row::before {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(34, 230, 245, 0.45);
+}
+
+/* The branch: a rounded elbow leaving the rail into the row's middle. */
+.list__row::after {
+  top: calc(50% - 4px);
+  box-sizing: border-box;
+  width: 10px;
+  height: 5px;
+  border-left: 1px solid rgba(34, 230, 245, 0.45);
+  border-bottom: 1px solid rgba(34, 230, 245, 0.45);
+  border-bottom-left-radius: 4px;
+}
+
+.list__row:first-child::before {
+  /* Up through the list's top padding to the rule. */
+  top: -4px;
+}
+
+.list__row:last-child::before {
+  /* Ends where its own elbow starts to curve. */
+  bottom: calc(50% + 4px);
 }
 
 .list__row:hover {
@@ -3368,6 +3382,10 @@ body.body--graph::before {
   box-shadow: inset 0 0 0 1px var(--mark-dim);
   color: var(--mark);
   font-weight: 600;
+}
+
+.list__row--highlight::after {
+  border-color: var(--mark);
 }
 
 .list__label {

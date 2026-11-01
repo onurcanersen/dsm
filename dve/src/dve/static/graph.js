@@ -26,9 +26,24 @@
   // What the writer leaves where a source had nothing to give.
   var MISSING = "NOT_FOUND";
 
+  // A hex colour at the given opacity.
+  function withAlpha(hex, alpha) {
+    var n = parseInt(hex.slice(1), 16);
+    return "rgba(" + (n >> 16) + ", " + ((n >> 8) & 255) + ", " + (n & 255) + ", " + alpha + ")";
+  }
+
+  // The lines of both views share one hand: corner radius, rest width and
+  // opacity, and the size of the dot where a tap meets its bus; the hover
+  // and find states are set once in makeGraph. The hardware view's trunk lines alone draw at
+  // full hue, 2px, with a glow.
+  var LINE_RADIUS = 8;
+  var LINE_WIDTH = 1.25;
+  var LINE_ALPHA = 0.7;
+  var END_MARK = 6;
+
   var COLOR = {
     cyan: "#22e6f5",
-    line: "rgba(34, 230, 245, 0.55)"
+    line: withAlpha("#22e6f5", LINE_ALPHA)
   };
 
   // The hardware view's networks each take a hue, dealt in bus order, so a
@@ -42,12 +57,6 @@
 
   function hueOf(k) {
     return HUES[k % HUES.length];
-  }
-
-  // A hex colour at the given opacity.
-  function withAlpha(hex, alpha) {
-    var n = parseInt(hex.slice(1), 16);
-    return "rgba(" + (n >> 16) + ", " + ((n >> 8) & 255) + ", " + (n & 255) + ", " + alpha + ")";
   }
 
   // The containment levels above a CSU, top down (SRS DSM-SMM req 6): the
@@ -91,6 +100,12 @@
   // Which picture is drawn: "sw" the system hierarchy tree, "hw" the
   // networks with their nodes (see the hardware section).
   var mode = "sw";
+  // Each picture's state kept across a switch to the other, for the model
+  // it was drawn from: the view's zoom and position, the boxes opened in
+  // the tree, the filter and the pinned card of the hardware view. Taken
+  // by snapshot() as the picture is left, spent by render() on its return.
+  var kept = { sw: null, hw: null };
+  var keptModel = null;
 
   /* ---------------------------------------------------------------- tree */
 
@@ -315,8 +330,7 @@
   var LANE_PITCH = 6; // between the taps running down a gutter
   var LANE_PAD = 10; // from a column's edge to its first lane, and past its last
   var GRID_GAP = 56; // from the last bar to the first cabinet
-  var END_PAD = 40; // the bars' run past the last row's channel
-  var LINE_RADIUS = 8; // the corners of every line, within the shortest run (LANE_PAD)
+  var END_PAD = 40; // the bars' run past the last row's channel; LANE_PAD holds LINE_RADIUS
   var MIN_RUN = 160; // the shortest line down a bar (no node on any network)
 
   function hardwareIndex(msd) {
@@ -827,8 +841,10 @@
 
   /* -------------------------------------------------------------- styling */
 
-  /* Every box is the same card: a glyph on the left, a title over a muted
-   * subtitle, and a bracketed [+]/[-] on the right when it can open. */
+  /* Every box of either view is the same card: a glyph on the left, a title
+   * over a muted subtitle, and a bracketed [+]/[-] on the right when it can
+   * open; the hardware view's units, consoles and cabinets wear the same
+   * glass, rim, hover and find (app.css, "boxes" and "buses"). */
 
   var BOX_HEIGHT = 44;
 
@@ -962,10 +978,11 @@
   }
 
   // From the box rules of app.css: the card border, the header's paddings, glyph and gaps,
-  // the rows' margins and paddings, and the scrollbar beside long lists.
+  // the rows' margins and paddings (the left one past the rail and tick), and the scrollbar
+  // beside long lists.
   var CARD_BORDER = 2;
   var HEAD_PAD = { left: 11, right: 10, gap: 10, glyph: 20, lamp: 14 };
-  var ROW_PAD = { margin: 4, side: 10, scrollbar: 12 };
+  var ROW_PAD = { margin: 4, left: 26, right: 10, scrollbar: 12 };
   // Cards never grow past MAX_WIDTH; text that would not fit is cut with an
   // ellipsis and carries the full name as a hover title.
   var MIN_WIDTH = 140;
@@ -999,7 +1016,7 @@
 
   function rowExtra(datum) {
     var items = (datum.data || {}).items || [];
-    return CARD_BORDER * 2 + (ROW_PAD.margin + ROW_PAD.side) * 2 + (items.length > LIST_CAP ? ROW_PAD.scrollbar : 0);
+    return CARD_BORDER * 2 + ROW_PAD.margin * 2 + ROW_PAD.left + ROW_PAD.right + (items.length > LIST_CAP ? ROW_PAD.scrollbar : 0);
   }
 
   // Whether a title will be cut at MAX_WIDTH.
@@ -1397,8 +1414,10 @@
 
   // A fan child hangs from its parent's bottom centre by the orthogonal
   // router; a list row leaves the trunk at the parent's tail with one elbow
-  // at its height. The elbow is read from current positions on every draw,
-  // since collapse-expand shifts positions after the layout.
+  // at its height; a CSU's relation cards hang from a rail halfway down
+  // the gap, which the CSU's tail drops to, so no card's line jogs about
+  // the CSU's centre. The elbows are read from current positions on every
+  // draw, since collapse-expand shifts positions after the layout.
   function edgeStyle(edge) {
     if (mode === "hw") {
       return hardwareEdgeStyle(edge);
@@ -1406,19 +1425,26 @@
     var source = graph.getNodeData(edge.source);
     var target = graph.getNodeData(edge.target);
     var level = ((target || {}).data || {}).level;
+    var sourceStyle = (source || {}).style || {};
+    var targetStyle = (target || {}).style || {};
+    if (level === "group") {
+      var tailX = (sourceStyle.x || 0) - widthOf(source) / 2 + TAIL;
+      var railY = (sourceStyle.y || 0) + BOX_HEIGHT / 2 + V_GAP / 2;
+      return {
+        router: false,
+        sourcePort: "tail",
+        targetPort: "in",
+        controlPoints: [[tailX, railY], [targetStyle.x || 0, railY]]
+      };
+    }
     if (level !== "csu") {
       return { router: { type: "orth" }, sourcePort: "out", targetPort: "in" };
     }
-    var sourceStyle = (source || {}).style || {};
-    var targetStyle = (target || {}).style || {};
     return {
       router: false,
       sourcePort: "tail",
       targetPort: "left",
-      endArrow: true,
-      endArrowSize: 6,
-      endArrowType: "triangle",
-      endArrowFill: COLOR.line,
+      endArrow: false,
       controlPoints: [[(sourceStyle.x || 0) - widthOf(source) / 2 + TAIL, targetStyle.y || 0]]
     };
   }
@@ -1448,7 +1474,7 @@
         endArrow: false
       };
     }
-    var color = data.color ? withAlpha(data.color, 0.7) : COLOR.line;
+    var color = data.color ? withAlpha(data.color, LINE_ALPHA) : COLOR.line;
     return {
       router: false,
       controlPoints: data.points || [],
@@ -1458,7 +1484,7 @@
       stroke: color,
       endArrow: true,
       endArrowType: "circle",
-      endArrowSize: 5,
+      endArrowSize: END_MARK,
       endArrowFill: color,
       endArrowStroke: color
     };
@@ -1695,19 +1721,21 @@
         type: "polyline",
         style: function (edge) {
           var style = edgeStyle(edge);
-          if (mode !== "hw") {
-            style.radius = 6;
+          if (style.radius === undefined) {
+            style.radius = LINE_RADIUS;
           }
           style.stroke = style.stroke || COLOR.line;
-          style.lineWidth = style.lineWidth || 1.25;
+          style.lineWidth = style.lineWidth || LINE_WIDTH;
           return style;
         },
         state: {
           // Lit white, like the hovered card: no halo, since the rows of a
           // list share one trunk and G6's halo would stack into a thick band.
-          active: { stroke: "#ffffff", lineWidth: 1.75, halo: false },
+          // A lit line rises above the rest, so the lines sharing its trunk
+          // or crossing it never paint over the light.
+          active: { stroke: "#ffffff", lineWidth: 1.75, endArrowFill: "#ffffff", endArrowStroke: "#ffffff", halo: false, zIndex: 2 },
           // A network's line found by the search: the mark's gold (see --mark in app.css).
-          highlight: { stroke: "#ffd166", lineWidth: 2.5, shadowColor: "rgba(255, 209, 102, 0.6)", shadowBlur: 10, halo: false }
+          highlight: { stroke: "#ffd166", lineWidth: 2.5, shadowColor: "rgba(255, 209, 102, 0.6)", shadowBlur: 10, halo: false, zIndex: 3 }
         }
       },
       // Pan, zoom and click to expand or collapse (req 43). The hardware
@@ -1734,14 +1762,10 @@
                 type: "collapse-expand",
                 trigger: "click",
                 animation: false,
-                align: true,
-                // An opened box moves to the middle of the stage and takes the find's
-                // gold like a search result; a closed one takes the gold where it is.
-                onExpand: function (id) {
-                  light(id);
-                  graph.focusElement(id, false);
-                },
-                onCollapse: light
+                // The clicked box stays where it is on screen; the view does not
+                // move, and neither opening nor closing lights it, the find's
+                // gold being the search's alone.
+                align: true
               }
         )
         .concat({ type: "hover-activate", degree: 1 }),
@@ -1769,12 +1793,92 @@
     });
   }
 
-  function render(msd) {
-    filter = { networks: {}, groups: {} };
+  // The box the view is remembered by: the tree's root, or the hardware
+  // picture's first node. Opening a box by a click shifts the laid-out
+  // tree rather than the view, so a fresh layout puts the tree elsewhere;
+  // the anchor's place on screen holds the view steady through that.
+  function anchorOf() {
+    var nodes = (tree && tree.data && tree.data.nodes) || [];
+    for (var i = 0; i < nodes.length; i += 1) {
+      if (mode !== "sw" || !tree.parents[nodes[i].id]) {
+        return nodes[i].id;
+      }
+    }
+    return null;
+  }
+
+  // The picture's state as the user left it (see kept).
+  function snapshot() {
+    if (!graph || !tree) {
+      return null;
+    }
+    var shot = { zoom: graph.getZoom(), position: graph.getPosition(), anchor: anchorOf() };
+    if (shot.anchor) {
+      var at = graph.getNodeData(shot.anchor).style;
+      shot.anchorAt = graph.getViewportByCanvas([at.x, at.y]);
+    }
+    if (mode === "sw") {
+      shot.open = graph
+        .getNodeData()
+        .filter(function (datum) {
+          return hasChildren(datum) && !G6.isCollapsed(datum);
+        })
+        .map(function (datum) {
+          return datum.id;
+        });
+    } else {
+      shot.filter = { networks: Object.assign({}, filter.networks), groups: Object.assign({}, filter.groups) };
+      shot.pinned = pinned;
+    }
+    return shot;
+  }
+
+  // Opens the tree's boxes a snapshot had open.
+  function reopen(data, open) {
+    var wanted = {};
+    open.forEach(function (id) {
+      wanted[id] = true;
+    });
+    (data.nodes || []).forEach(function (datum) {
+      if (wanted[datum.id] && datum.style) {
+        datum.style.collapsed = false;
+      }
+    });
+  }
+
+  // Puts the view back where a snapshot had it, and the pinned card's light:
+  // the anchor box back on its spot on screen, or, without one, the view's
+  // position (in canvas units; G6's absolute translate is not its inverse,
+  // so the view is moved by the difference, scaled to viewport px).
+  function restoreView(shot) {
+    return graph
+      .zoomTo(shot.zoom, false)
+      .then(function () {
+        var anchor = shot.anchor ? nodeData(shot.anchor) : null;
+        if (anchor && shot.anchorAt) {
+          var now = graph.getViewportByCanvas([anchor.style.x, anchor.style.y]);
+          return graph.translateBy([shot.anchorAt[0] - now[0], shot.anchorAt[1] - now[1]], false);
+        }
+        var at = graph.getPosition();
+        return graph.translateBy([(shot.position[0] - at[0]) * shot.zoom, (shot.position[1] - at[1]) * shot.zoom], false);
+      })
+      .then(function () {
+        stickLabels();
+        return shot.pinned ? pin(shot.pinned) : undefined;
+      });
+  }
+
+  // Draws the picture of the current mode; with a snapshot, as it was left.
+  function render(msd, shot) {
+    filter = shot && shot.filter ? shot.filter : { networks: {}, groups: {} };
     tree = mode === "hw" ? buildHardware(msd, filter) : buildTree(msd);
+    if (shot && shot.open) {
+      reopen(tree.data, shot.open);
+    }
     lit = null;
     resetChips();
     fillFilters(mode === "hw" ? hardwareIndex(msd) : null);
+    pressFilterChips();
     pending = Promise.resolve();
     if (graph) {
       graph.destroy();
@@ -1788,9 +1892,8 @@
     // The bars' tags follow the view (see stickLabels).
     stuck = {};
     graph.on("aftertransform", queueStick);
-    // A hovered node lights its networks' lines and switches too: the
-    // hover reaches its taps and the bands at their ends, not the lines
-    // drawn under the bands (see hardwareEdgeStyle).
+    // A hovered card lights its reach (see reachOf): the networks' lines
+    // and switches of a node, the path to the root of a software box.
     graph.on("node:pointerenter", function (event) {
       lightLines(event, true);
     });
@@ -1811,7 +1914,9 @@
     window.dsmGraph = graph;
     return graph
       .render()
-      .then(fitPicture)
+      .then(function () {
+        return shot ? restoreView(shot) : fitPicture();
+      })
       .then(function () {
         if (el.panel) {
           el.panel.hidden = false;
@@ -2181,13 +2286,27 @@
     }
   }
 
-  // What a card in the hardware view reaches: for a node, its taps, the
+  // What a card reaches. In the hardware view, for a node, its taps, the
   // bars and lines of its networks and their switches; for a switch, its
-  // line and bar, its nodes and their taps to it. The card itself first.
+  // line and bar, its nodes and their taps to it. In the software view,
+  // the boxes above it up to the root and the edges between them. The
+  // card itself first.
   function reachOf(id) {
-    var datum = mode === "hw" && tree ? nodeData(id) : null;
+    var datum = tree ? nodeData(id) : null;
     var level = datum ? (datum.data || {}).level : null;
     var ids = [];
+    if (mode === "sw") {
+      var child = id;
+      var parent = datum ? tree.parents[child] : null;
+      if (parent) {
+        ids.push(id);
+      }
+      while (parent) {
+        ids.push(parent + "->" + child, parent);
+        child = parent;
+        parent = tree.parents[child];
+      }
+    }
     if (level === "node") {
       ids.push(id);
       graph.getEdgeData().forEach(function (edge) {
@@ -2227,10 +2346,10 @@
 
   // A hovered card lights its reach beyond what hover-activate reaches
   // (its neighbours alone), and unlights it on leaving; a pinned card's
-  // reach is put back after any leave, since the hover's own unlighting
-  // may have crossed it.
+  // reach (hardware view) is put back after any leave, since the hover's
+  // own unlighting may have crossed it.
   function lightLines(event, on) {
-    if (!event.target || mode !== "hw" || !tree) {
+    if (!event.target || !tree) {
       return;
     }
     lightReach(event.target.id, on).then(function () {
@@ -2352,6 +2471,8 @@
     chip.type = "button";
     chip.className = "gsearch__chip gfilter__chip";
     chip.setAttribute("aria-pressed", "false");
+    chip.setAttribute("data-set", set);
+    chip.setAttribute("data-key", key);
     if (hue) {
       chip.style.setProperty("--bus", hue);
       var dot = document.createElement("i");
@@ -2370,6 +2491,17 @@
       refilter();
     });
     return chip;
+  }
+
+  // Presses the chips of the current filter, after the chips are made afresh.
+  function pressFilterChips() {
+    if (!el.filter) {
+      return;
+    }
+    Array.prototype.forEach.call(el.filter.querySelectorAll(".gfilter__chip"), function (chip) {
+      var on = !!filter[chip.getAttribute("data-set")][chip.getAttribute("data-key")];
+      chip.setAttribute("aria-pressed", on ? "true" : "false");
+    });
   }
 
   // Redraws the hardware picture under the current filter, fitted anew.
@@ -2529,7 +2661,8 @@
 
   // Draws the model's graph (SRS DSM-SMM req 6, 7) in the given mode, "sw"
   // or "hw" (the current one when none); resolves once the first picture
-  // is on screen.
+  // is on screen. Switching modes on the same model keeps the picture
+  // left behind as it was (see kept) and brings back the one returned to.
   function load(msd, which) {
     if (!mounted) {
       return Promise.reject(new Error("mount() first"));
@@ -2537,12 +2670,21 @@
     if (typeof G6 === "undefined" || !G6.Graph || !G6.treeToGraphData) {
       return Promise.reject(new Error("The graph library is missing."));
     }
-    if (which === "sw" || which === "hw") {
+    if (msd !== keptModel) {
+      kept = { sw: null, hw: null };
+      keptModel = msd;
+    }
+    if ((which === "sw" || which === "hw") && which !== mode) {
+      if (graph && lastModel === msd) {
+        kept[mode] = snapshot();
+      }
       mode = which;
     }
+    var shot = kept[mode];
+    kept[mode] = null;
     lastModel = msd;
     return (document.fonts ? document.fonts.ready : Promise.resolve()).then(function () {
-      return render(msd);
+      return render(msd, shot);
     });
   }
 

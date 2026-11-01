@@ -28,6 +28,9 @@
 
   /* The graph stage's glass panels, search and hover cards (req 43): rim and lift. */
   --glass-line: rgba(34, 230, 245, 0.42);
+  /* The tint over a stage card's frosted fill; the decks' panels and the
+     graph stage's hover cards take the same. */
+  --card-tint: rgba(6, 26, 36, 0.42);
   --glass-shadow: 0 10px 30px rgba(0, 8, 14, 0.55), 0 0 18px rgba(34, 230, 245, 0.14), inset 0 1px 0 rgba(34, 230, 245, 0.18);
   /* The shade down the top of every page, 26rem tall: the page's ink fading out over the picture. */
   --top-shade: linear-gradient(to bottom, rgba(2, 16, 26, 0.88) 0, rgba(2, 16, 26, 0.72) 9rem, rgba(2, 16, 26, 0.4) 17rem, rgba(2, 16, 26, 0) 100%);
@@ -156,16 +159,19 @@ body::before {
   background: var(--top-shade);
 }
 
-/* The run deck alone sits on the open sea: the ship stands beside its
-   console as an image of its own (bg-sea-blur.jpeg is bg-sea.jpeg blurred
-   the same way as bg-blur.jpeg). */
-body.body--run {
-  background-image: url("img/bg-sea.jpeg");
+/* The run deck, the model deck and the graph stage stand on one floor, a
+   dark grid receding to a horizon (bg-floor.jpeg; bg-floor-blur.jpeg is
+   its half-size copy with a 1.5px blur, the panels' frosted fill). The
+   ship stands beside the run deck's console as an image of its own. The
+   stage's own rules follow in its section. */
+body.body--run,
+body.body--model {
+  background-image: url("img/bg-floor.jpeg");
 }
 
-body.body--run .card__blur::before,
-body.body--run .mpanel__blur::before {
-  background-image: url("img/bg-sea-blur.jpeg");
+body.body--run .mpanel__blur::before,
+body.body--model .mpanel__blur::before {
+  background-image: url("img/bg-floor-blur.jpeg");
 }
 
 /* The hidden attribute wins over any display the rules below set. */
@@ -669,7 +675,7 @@ html::-webkit-scrollbar-corner,
   content: "";
   position: absolute;
   inset: 0;
-  background-color: rgba(6, 26, 36, 0.42);
+  background-color: var(--card-tint);
 }
 
 /* Four corner brackets with the glow baked into the SVG: 38px bracket plus a 16px halo, offset onto the frame's corner. */
@@ -2210,11 +2216,6 @@ html::-webkit-scrollbar-corner,
   display: none;
 }
 
-/* A deeper tint on the panels keeps their rows legible over the background. */
-.mpanel__blur::after {
-  background-color: rgba(6, 26, 36, 0.7);
-}
-
 /* Two columns of two panels; the gap leaves room for the corner glows. */
 .model__grid {
   display: grid;
@@ -2309,23 +2310,30 @@ html::-webkit-scrollbar-corner,
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  background-color: var(--line);
 }
 
 .scale__row {
   display: grid;
-  gap: 1px;
 }
 
 .scale__row--three {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+/* The cells are the panel's glass alone, as the rows below, with the
+   page's line drawn between them (a row above a row, a cell beside a cell)
+   as the rules between the rows. */
+.scale__row + .scale__row {
+  border-top: 1px solid var(--line);
+}
+
 .scale__cell {
   padding: 1.2rem;
-  background-color: rgba(2, 14, 20, 0.55);
   text-align: center;
+}
+
+.scale__cell + .scale__cell {
+  border-left: 1px solid var(--line);
 }
 
 .scale__value {
@@ -2452,11 +2460,20 @@ html::-webkit-scrollbar-corner,
   gap: 0;
 }
 
-/* The whole page goes to the canvas, under the stepper on the header line. */
+/* The whole page goes to the canvas, under the stepper on the header line.
+   The stage stands on the model deck's floor (body--model above); the
+   blurred copy is the frosted fill of the search panel and the hover
+   cards. */
 body.body--graph {
   padding: 0;
-  background-image: url("img/bg-blur.jpeg");
+  background-image: url("img/bg-floor.jpeg");
 }
+
+body.body--graph .mpanel__blur::before,
+body.body--graph .graph__canvas .tooltip::before {
+  background-image: url("img/bg-floor-blur.jpeg");
+}
+
 
 /* The frame goes with the model deck's; the border too, so the stage
    runs edge to edge (req 43). */
@@ -2873,9 +2890,7 @@ body.body--graph::before {
 }
 
 .graph__canvas .tooltip::after {
-  /* Deeper than the panel's tint: the card floats over the picture, so
-     its text must read over whatever lies beneath. */
-  background-color: rgba(6, 26, 36, 0.78);
+  background-color: var(--card-tint);
 }
 
 /* The canvas takes the whole stage. */
@@ -3413,11 +3428,13 @@ body.body--graph::before {
    !important to keep both cards identical. */
 .graph__canvas .tooltip {
   overflow: hidden;
-  border: 1px solid rgba(34, 230, 245, 0.3) !important;
-  border-radius: calc(var(--r-card) - .4rem) !important;
+  /* The stage card's frame (.card): its rim, radius and inset glow, with
+     a lift of its own since the card floats over the picture. */
+  border: 2px solid rgba(34, 230, 245, 0.3) !important;
+  border-radius: var(--r-card) !important;
   background: none !important;
   z-index: 10 !important;
-  box-shadow: 0 10px 30px rgba(0, 8, 14, 0.55), 0 0 0 1px rgba(0, 8, 14, 0.35) !important;
+  box-shadow: inset 0 0 60px rgba(34, 230, 245, 0.06), 0 10px 30px rgba(0, 8, 14, 0.55) !important;
   color: #ffffff !important;
   font-family: Barlow, sans-serif !important;
   font-size: 1.1rem !important;

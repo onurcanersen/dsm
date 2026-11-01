@@ -198,6 +198,7 @@
     el.shell.classList.toggle("shell--model", name === "model");
     el.shell.classList.toggle("shell--graph", name === "graph");
     document.body.classList.toggle("body--graph", name === "graph");
+    document.body.classList.toggle("body--model", name === "model");
     document.body.classList.toggle("body--run", name === "run");
     renderSessionbar(STAGES.indexOf(name) !== -1);
     renderRunIndicator();

@@ -2057,7 +2057,6 @@
       return;
     }
     el.graphContext.hidden = true;
-    el.graphLegend.hidden = true;
     el.graphLoading.hidden = false;
     loadModel(runId)
       .then(function (model) {
@@ -2083,7 +2082,6 @@
       current: el.graphCurrent,
       generated: el.graphGenerated
     });
-    el.graphLegend.hidden = false;
     renderGraphMode();
     if (graphModel === model && graphDrawnMode === state.graphMode) {
       // Back on the card: the canvas may have been hidden while the window changed.
@@ -2111,11 +2109,10 @@
     }, 30);
   }
 
-  // The title, chips and legend follow the mode.
+  // The title and chips follow the mode.
   function renderGraphMode() {
     renderGraphTitle();
     el.graphSearch.setAttribute("data-mode", state.graphMode);
-    el.graphLegend.setAttribute("data-mode", state.graphMode);
   }
 
   // The stage's title is the model deck's; a segmented switch beside it

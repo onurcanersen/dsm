@@ -49,9 +49,9 @@
  * below. Built with fontTools from
  * https://cdn.jsdelivr.net/npm/lucide-static@1.43.0/font/lucide.woff2:
  * pyftsubset lucide.woff2 --unicodes=U+e049,... --flavor=woff2 --output-file=lucide-subset.woff2
- * (36 glyphs at present; the graph stage uses the ship, layers, boxes,
- * box, cpu, server, radio, mail and library ones, and network for the
- * hardware view's buses)
+ * (37 glyphs at present; the graph stage uses the ship, layers, boxes,
+ * box, cpu, server, radio, mail and library ones, network for the
+ * hardware view's buses and monitor for its console nodes)
  */
 @font-face {
   font-family: lucide;
@@ -166,6 +166,10 @@
 }
 .lucide-server::before {
   content: "\e153";
+}
+
+.lucide-monitor::before {
+  content: "\e11d";
 }
 .lucide-ship::before {
   content: "\e3ba";

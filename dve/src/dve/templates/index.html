@@ -563,33 +563,21 @@
                 <button type="button" class="gsearch__chip" data-type="lib" data-mode="sw" aria-pressed="false">Library</button>
                 <button type="button" class="gsearch__chip" data-type="relation" data-mode="sw" aria-pressed="false">Relation</button>
               </div>
+              <!-- The hardware view's filters: a chip per network and per
+                   node group, filled by graph.js for each model. -->
+              <div class="gfilter" data-mode="hw" hidden>
+                <div class="gfilter__row" hidden>
+                  <span class="gfilter__title">Networks</span>
+                  <div class="gfilter__chips" data-filter="networks" aria-label="Filter by network"></div>
+                </div>
+                <div class="gfilter__row" hidden>
+                  <span class="gfilter__title">Groups</span>
+                  <div class="gfilter__chips" data-filter="groups" aria-label="Filter by node group"></div>
+                </div>
+              </div>
               <p class="gsearch__count" role="status" hidden></p>
               <div class="gsearch__results" id="graph-search-results" role="listbox" hidden></div>
             </div>
-
-            <!-- What the boxes' glyphs and marks mean, and how to move the
-                 picture (req 43): one line along the stage's bottom edge. -->
-            <section class="glegend" id="graph-legend" hidden>
-              <ul class="glegend__icons">
-                <li data-mode="sw"><i class="lucide lucide-ship"></i>CSMS</li>
-                <li data-mode="sw"><i class="lucide lucide-layers"></i>CSS</li>
-                <li data-mode="sw"><i class="lucide lucide-boxes"></i>CSCI</li>
-                <li data-mode="sw"><i class="lucide lucide-box"></i>CSC</li>
-                <li data-mode="sw"><i class="lucide lucide-cpu"></i>CSU</li>
-                <li><i class="lucide lucide-server"></i>Node</li>
-                <li data-mode="hw"><span class="glegend__swatch glegend__swatch--bus"></span>Network</li>
-                <li data-mode="hw"><span class="glegend__swatch glegend__swatch--link"></span>Connects to</li>
-                <li data-mode="sw"><i class="lucide lucide-radio"></i>Topic</li>
-                <li data-mode="sw"><i class="lucide lucide-mail"></i>Message</li>
-                <li data-mode="sw"><i class="lucide lucide-library"></i>Library</li>
-              </ul>
-              <ul class="glegend__help">
-                <li>Drag to pan</li>
-                <li>Scroll to zoom</li>
-                <li><span class="glegend__mark">[+]</span> <span class="glegend__mark">[−]</span> expand, collapse</li>
-                <li>Hover for details</li>
-              </ul>
-            </section>
 
             <div class="graph__stage" id="graph-stage">
               <div class="graph__canvas" id="graph-canvas"></div>

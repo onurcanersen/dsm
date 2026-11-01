@@ -2575,110 +2575,10 @@ body.body--graph::before {
   cursor: default;
 }
 
-/* The chips and legend items of the other mode stay out of sight. */
+/* The chips of the other mode stay out of sight. */
 .gsearch[data-mode="hw"] [data-mode="sw"],
-.gsearch[data-mode="sw"] [data-mode="hw"],
-.glegend[data-mode="hw"] [data-mode="sw"],
-.glegend[data-mode="sw"] [data-mode="hw"] {
+.gsearch[data-mode="sw"] [data-mode="hw"] {
   display: none;
-}
-
-/* The legend, one line along the stage's bottom edge: the glyphs with
-   their names, then how to move the picture (req 43). Inked in like the
-   title so it holds over the tree. */
-.glegend {
-  position: fixed;
-  right: 2.4rem;
-  bottom: 1.6rem;
-  left: 2.4rem;
-  z-index: 5;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: .6rem 1.8rem;
-  margin: 0;
-  color: #ffffff;
-  font-family: Barlow, sans-serif;
-  font-size: 1.1rem;
-  line-height: 1.35;
-  text-shadow: var(--ink-shadow);
-}
-
-.glegend[hidden] {
-  display: none;
-}
-
-/* The glyphs and their names in a row; the help after them, divided off
-   by a hairline and pushed to the line's end. */
-.glegend__icons,
-.glegend__help {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: .4rem 1.6rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.glegend__icons li {
-  display: flex;
-  align-items: center;
-  gap: .6rem;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-/* The glyphs and marks keep the line's dark ink (inherited) rather than
-   the boxes' cyan glow, so the whole line holds over the tree alike. */
-.glegend__icons .lucide,
-.glegend__mark {
-  flex: none;
-  font-size: 1.4rem;
-  line-height: 1;
-  color: var(--cyan);
-}
-
-.glegend__help {
-  margin-left: auto;
-  padding-left: 1.8rem;
-  box-shadow: inset 1px 0 0 rgba(34, 230, 245, 0.16);
-  color: #ffffff;
-  white-space: nowrap;
-}
-
-/* Each help item centres its marks on the text's middle. */
-.glegend__help li {
-  display: flex;
-  align-items: center;
-  gap: .4rem;
-}
-
-.glegend__mark {
-  font-size: 1.1rem;
-}
-
-.glegend__mark + .glegend__mark {
-  margin-left: -.4rem;
-}
-
-/* The hardware view's lines in the legend as they are drawn: a network is
-   a horizontal line, a link a vertical one. */
-.glegend__swatch {
-  flex: none;
-  display: inline-block;
-  background: var(--cyan);
-  box-shadow: 0 0 6px rgba(34, 230, 245, 0.6);
-}
-
-.glegend__swatch--bus {
-  width: 1.8rem;
-  height: 2px;
-}
-
-.glegend__swatch--link {
-  width: 2px;
-  height: 1.2rem;
 }
 
 /* The search panel (req 43) in the stage's top right corner: a field,
@@ -2694,9 +2594,8 @@ body.body--graph::before {
   gap: .8rem;
   box-sizing: border-box;
   width: 30rem;
-  /* Stops short of the legend line along the bottom edge (16px up, one
-     line of 15px, and the same 16px clear above it). */
-  max-height: calc(100vh - 8.8rem - 4.7rem);
+  /* Stops short of the stage's bottom edge. */
+  max-height: calc(100vh - 8.8rem - 1.6rem);
   margin: 0;
   padding: 1rem 1.4rem 1.1rem;
   overflow: hidden;
@@ -2870,6 +2769,63 @@ body.body--graph::before {
   box-shadow: 0 0 8px rgba(34, 230, 245, 0.25);
 }
 
+/* The hardware view's filters under the type chips: a titled row of
+   chips per set, the network chips each with a dot in the bus's hue. */
+.gfilter {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: .6rem;
+  padding-top: .6rem;
+  border-top: 1px solid var(--line);
+}
+
+.gfilter[hidden],
+.gfilter__row[hidden] {
+  display: none;
+}
+
+.gfilter__row {
+  display: flex;
+  flex-direction: column;
+  gap: .4rem;
+}
+
+.gfilter__title {
+  font-size: var(--fs-chip);
+  letter-spacing: var(--ls-tight);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.gfilter__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+
+.gfilter__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  --bus: var(--cyan);
+}
+
+.gfilter__chip[aria-pressed="true"] {
+  border-color: var(--bus);
+  color: var(--bus);
+  background-color: color-mix(in srgb, var(--bus) 14%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--bus) 25%, transparent);
+}
+
+.gfilter__dot {
+  width: .7rem;
+  height: .7rem;
+  border-radius: 50%;
+  background: var(--bus);
+  box-shadow: 0 0 4px color-mix(in srgb, var(--bus) 60%, transparent);
+}
+
 .gsearch__count {
   flex: none;
   margin: 0;
@@ -3018,126 +2974,256 @@ body.body--graph::before {
    zooms the whole picture by the root scale (uiScale), so the values stay
    px and mirror graph.js's constants. */
 
-/* A network of the hardware view (a G6 HTML node): its name over the left
-   end of the glowing line that runs across the stage. The node is
-   transparent, so the lines drawn under it show. */
+/* A network of the hardware view (a G6 HTML node): a vertical bar, the
+   glowing line down its right and its name written down beside the line's
+   top, both in the network's own hue (--bus, set on the node; cyan when
+   none). The node is transparent, so the lines drawn under it show. */
 .bus {
+  --bus: var(--cyan);
   position: relative;
   width: 100%;
   height: 100%;
   color: #ffffff;
   font-family: Barlow, sans-serif;
   user-select: none;
-  /* Only the label and the line take the pointer: the lines drawn under the
-     rest of the node stay hoverable. */
+  /* Only the line takes the pointer (its name sits on its switch). */
   pointer-events: none;
 }
 
-.bus__label,
-.bus__line {
+.bus__line,
+.bus__tag {
   pointer-events: auto;
 }
 
-/* The name over the line's left end, its node count and fold toggle beside it. */
-.bus__label {
-  position: absolute;
-  top: 0;
-  left: 0;
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  max-width: 100%;
-  text-shadow: var(--ink-shadow);
-  cursor: pointer;
-}
-
-/* How many nodes the bus carries, and the fold toggle after it. */
-.bus__count {
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  color: rgba(223, 238, 242, 0.55);
-  white-space: nowrap;
-  text-transform: uppercase;
-}
-
-.bus__toggle {
-  font-size: 12px;
-  color: var(--cyan);
-  text-shadow: 0 0 6px rgba(34, 230, 245, 0.5);
-}
-
-.bus__label:hover .bus__name {
-  color: var(--cyan);
-}
-
-.bus__name {
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  line-height: 1.15;
-  color: #ffffff;
-  white-space: nowrap;
-  text-transform: uppercase;
-}
-
-/* A 10px band to hover, with the 2px line drawn through its middle. */
+/* A 10px band to hover down the node's middle (LINE_X in graph.js), the
+   full height; the line itself is the network's edge on the canvas under
+   it (see hardwareEdgeStyle in graph.js), so the band draws nothing. */
 .bus__line {
   position: absolute;
-  right: 0;
-  height: 10px;
+  top: 0;
+  bottom: 0;
+  left: calc(50% - 5px);
+  width: 10px;
 }
 
-.bus__line::before {
-  content: "";
+/* The name tag riding the line: a pill in the network's hue over the
+   page's ink, the name read top to bottom; its top is set inline and
+   slides with the view (see stickLabels in graph.js). Its width stays
+   under the bars' pitch (BUS_PITCH), so neighbours never touch. */
+.bus__tag {
   position: absolute;
-  top: 4px;
-  right: 0;
-  left: 0;
-  height: 2px;
-  background: var(--cyan);
-  box-shadow: 0 0 8px rgba(34, 230, 245, 0.6), 0 0 2px rgba(34, 230, 245, 0.9);
-  transition: background-color var(--t), box-shadow var(--t);
+  top: 0;
+  left: 50%;
+  box-sizing: border-box;
+  padding: 6px 0;
+  border: 1px solid var(--bus);
+  border-radius: var(--r-pill);
+  background: #06141b;
+  transform: translateX(-50%);
+  writing-mode: vertical-rl;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  line-height: 14px;
+  color: var(--bus);
+  white-space: nowrap;
+  text-transform: uppercase;
+  box-shadow: 0 0 6px color-mix(in srgb, var(--bus) 40%, transparent);
+  transition: color var(--t), border-color var(--t), box-shadow var(--t);
 }
 
-/* A network nothing joins: a dashed, dimmer line. */
-.bus--empty .bus__line::before {
-  background: repeating-linear-gradient(90deg, rgba(34, 230, 245, 0.55) 0 6px, transparent 6px 11px);
+/* A network nothing joins: the tag dashed, like its line. */
+.bus--empty .bus__tag {
+  border-style: dashed;
   box-shadow: none;
 }
 
-/* A cluster label over a group's first card in the hardware grid (its own
-   HTML node): a muted uppercase micro-label, inked in like the title. */
-.glabel {
+.bus--active .bus__tag {
+  border-color: #ffffff;
+  color: #ffffff;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
+}
+
+.bus--highlight .bus__tag {
+  border-color: var(--mark);
+  color: var(--mark);
+  box-shadow: 0 0 8px var(--mark-dim);
+}
+
+/* A server cabinet of the hardware view (its own HTML node, drawn under
+   the group's units): the software view's box as a frame, the same 2px
+   glowing cyan rim, radius and glass, with its own head along the top (the
+   group's name in caps, a pill with the unit count, a rule beneath) and a
+   rail of mounting holes down each side. Its back is near-opaque,
+   so the taps the units drop stay hidden until they leave its foot. The
+   head's heights (--rule to its rule, --head to the first unit) and the
+   rails' width (--rail) come in as CSS variables from graph.js. */
+.rack {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  border: 2px solid rgba(34, 230, 245, 0.8);
+  border-radius: 8px;
+  background-color: rgba(6, 26, 36, 0.92);
+  background-image: linear-gradient(180deg, rgba(120, 240, 255, 0.12), rgba(8, 60, 80, 0.28));
+  box-shadow: 0 0 10px rgba(34, 230, 245, 0.45), 0 0 2px rgba(34, 230, 245, 0.8), inset 0 0 12px rgba(34, 230, 245, 0.14);
+  color: #ffffff;
   font-family: Barlow, sans-serif;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* The head under the rim: the name at the left, the count pill at the
+   right, a rule along the bottom like a relation card's list rule. */
+.rack__head {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  box-sizing: border-box;
+  height: calc(var(--rule) - 2px);
+  margin: 0 4px;
+  padding: 0 4px 0 7px;
+  border-bottom: 1px solid rgba(34, 230, 245, 0.35);
+}
+
+.rack__name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  line-height: 16px;
-  color: rgba(205, 240, 248, 0.8);
-  white-space: nowrap;
-  text-shadow: var(--ink-shadow);
-  text-transform: uppercase;
-  user-select: none;
-}
-
-.bus--active .bus__line::before {
-  height: 3px;
-  background: #ffffff;
-  box-shadow: 0 0 12px rgba(255, 255, 255, 0.8), 0 0 3px #ffffff;
-}
-
-.bus--active .bus__name {
+  letter-spacing: 0.14em;
+  line-height: 1;
   color: #ffffff;
-  text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px rgba(34, 230, 245, 0.55);
 }
 
-.bus--highlight .bus__line::before {
+.rack__count {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  line-height: 1.2;
+  color: var(--muted);
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+/* The rails from under the head to the bottom rim: a column of glowing
+   holes centred in the rail, five to a unit's pitch (--pitch from
+   graph.js), so every unit sees the same holes at the same heights and
+   the pattern never drifts against the stack. */
+.rack__rail {
+  position: absolute;
+  top: var(--head);
+  bottom: 0;
+  width: var(--rail);
+  background-image: radial-gradient(circle, rgba(34, 230, 245, 0.55) 0 1px, transparent 1.6px);
+  background-size: var(--rail) var(--pitch);
+  background-position: 0 0;
+  background-repeat: repeat-y;
+}
+
+.rack__rail--left {
+  left: 0;
+}
+
+.rack__rail--right {
+  right: 0;
+}
+
+/* A node with a display, drawn outside the cabinet as a console: the
+   cabinet's own rim (the software box's 2px glowing cyan frame and radius)
+   on the unit's glass, no lamp. The hover and find states keep the card's
+   colours on the rim. */
+.box.box--console {
+  border: 2px solid rgba(34, 230, 245, 0.8);
+  border-radius: 8px;
+  background-color: rgba(2, 16, 26, 0.55);
+  background-image: linear-gradient(180deg, rgba(120, 240, 255, 0.1), rgba(8, 60, 80, 0.2));
+  box-shadow: 0 0 10px rgba(34, 230, 245, 0.45), 0 0 2px rgba(34, 230, 245, 0.8), inset 0 0 12px rgba(34, 230, 245, 0.14);
+}
+
+.box.box--console .box__head {
+  height: 40px;
+}
+
+.box.box--console.box--active {
+  border-color: #ffffff;
+  background-color: #123a4a;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.1));
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.45), 0 0 2px #ffffff;
+}
+
+.box.box--console.box--highlight {
+  border-color: var(--mark);
+  background-color: #3a2e10;
+  background-image: linear-gradient(180deg, rgba(255, 209, 102, 0.18), rgba(0, 0, 0, 0.15));
+  box-shadow: 0 0 10px var(--mark-dim), 0 0 2px var(--mark);
+}
+
+/* A node drawn in a cabinet, as a rack unit: a smaller box in the same
+   glass, a 1px rim, edge to edge between the rails, a status lamp at the
+   end of its front. The hover and find states keep the card's colours on
+   the rim and lamp. */
+.box.box--unit {
+  border: 1px solid rgba(34, 230, 245, 0.55);
+  border-radius: 6px;
+  background-color: rgba(2, 16, 26, 0.55);
+  background-image: linear-gradient(180deg, rgba(120, 240, 255, 0.1), rgba(8, 60, 80, 0.2));
+  box-shadow: none;
+}
+
+.box.box--unit .box__head {
+  height: 42px;
+}
+
+.box.box--unit .box__head::after {
+  content: "";
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: #4fe08a;
+  box-shadow: 0 0 5px rgba(79, 224, 138, 0.8);
+}
+
+/* A switch in the network cabinet: a unit like any other, its lamp in
+   its bus's hue (--bus, set inline by graph.js) where a node's is green. */
+.box.box--switch .box__head::after {
+  background: var(--bus);
+  box-shadow: 0 0 5px color-mix(in srgb, var(--bus) 80%, transparent);
+}
+
+.box.box--unit.box--active {
+  border-color: #ffffff;
+  background-color: #123a4a;
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.1));
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
+}
+
+.box.box--unit.box--highlight {
+  border-color: var(--mark);
+  background-color: #3a2e10;
+  background-image: linear-gradient(180deg, rgba(255, 209, 102, 0.18), rgba(0, 0, 0, 0.15));
+  box-shadow: 0 0 8px var(--mark-dim);
+}
+
+.box.box--unit.box--highlight .box__head::after {
   background: var(--mark);
-  box-shadow: 0 0 10px var(--mark-dim), 0 0 3px var(--mark);
-}
-
-.bus--highlight .bus__name {
-  color: var(--mark);
+  box-shadow: 0 0 5px var(--mark-dim);
 }
 
 /* ------------------------------------------------ boxes */
@@ -3148,6 +3234,9 @@ body.body--graph::before {
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  /* The rim lies within the node's size, so the card sits where the
+     layout put it, centred between a cabinet's rails. */
+  box-sizing: border-box;
   width: 100%;
   height: 100%;
   border: 2px solid rgba(34, 230, 245, 0.8);

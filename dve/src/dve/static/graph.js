@@ -1,9 +1,10 @@
 /* The two pictures of a Model Setup Data file on a vendored AntV G6 canvas:
  * the software view, a tree CSMS > CSS > CSCI > CSC > CSU with one relation
  * card per CSU (SRS DSM-SMM req 6, 7), and the hardware view, the networks
- * as bus lines with their nodes beneath. app.js drives both through
+ * as switches in a cabinet, each with a bus line, and the nodes in their
+ * cabinets tapping the lines. app.js drives both through
  * window.DsmHierarchyGraph; the search panel finds, opens, centres and
- * lights a box, row or bus (SRS DSM-DVE req 43). */
+ * lights a box, row, switch or bus (SRS DSM-DVE req 43). */
 (function () {
   "use strict";
 
@@ -30,6 +31,25 @@
     line: "rgba(34, 230, 245, 0.55)"
   };
 
+  // The hardware view's networks each take a hue, dealt in bus order, so a
+  // line, its switch's lamp, its chip and its taps read as one network at
+  // a glance: the app's cyan first, then nine instrument hues at the same
+  // brightness, warm and cool alternating so neighbours in the order never
+  // look alike (adjacent pairs checked for colour-blind separation; the
+  // one weak pair, mint beside rose, is covered by the names on the
+  // switches and chips).
+  var HUES = ["#22e6f5", "#ff9a3c", "#3d7dff", "#c1e34a", "#ff5fc4", "#9d7bff", "#2fd68e", "#ff5f6d", "#e3b94f", "#5ec8ff"];
+
+  function hueOf(k) {
+    return HUES[k % HUES.length];
+  }
+
+  // A hex colour at the given opacity.
+  function withAlpha(hex, alpha) {
+    var n = parseInt(hex.slice(1), 16);
+    return "rgba(" + (n >> 16) + ", " + ((n >> 8) & 255) + ", " + (n & 255) + ", " + alpha + ")";
+  }
+
   // The containment levels above a CSU, top down (SRS DSM-SMM req 6): the
   // hierarchy field naming each and the tag its box carries.
   var LEVELS = [
@@ -50,7 +70,7 @@
     { key: "uses", label: "USES", kind: "lib", list: "libraries" }
   ];
 
-  var KIND_NAMES = { app: "CSU", node: "Node", topic: "Topic", message: "Message", lib: "Library", network: "Network" };
+  var KIND_NAMES = { app: "CSU", node: "Node", topic: "Topic", message: "Message", lib: "Library", network: "Network", switch: "Switch" };
 
   // el.graph is the container app.js hands over; el.rowTip the hover card of the rows.
   var el = {};
@@ -59,6 +79,9 @@
   var tree = null;
   // The model last loaded, for Collapse all to rebuild from.
   var lastModel = null;
+  // The hardware view's filter: the networks and node groups picked in
+  // the panel, by id and by name; none picked in a set means every one.
+  var filter = { networks: {}, groups: {} };
   // The search's one lit target { nodeId, ref } (req 43), ref null for a box
   // alone; rowsHtml reads it so a re-render keeps the row lit.
   var lit = null;
@@ -68,8 +91,6 @@
   // Which picture is drawn: "sw" the system hierarchy tree, "hw" the
   // networks with their nodes (see the hardware section).
   var mode = "sw";
-  // The hardware view's open buses by id: the grid shows the cards on them.
-  var openBuses = {};
 
   /* ---------------------------------------------------------------- tree */
 
@@ -246,27 +267,57 @@
 
   /* ------------------------------------------------------------ hardware */
 
-  /* The hardware view: every network a horizontal bus line, one under the
-   * other, each with a [+]/[-] toggle. The cards on the open buses form a
-   * grid above the lines, left to right in group order, as many to a row as
-   * the stage is wide, each group opening under a cluster label, and from
-   * each card one straight tap down to every open bus it is on (the port
-   * names stay in the hover card). Each node is drawn once. Positions are
-   * computed here, so the graph runs with no layout. */
+  /* The hardware view: every network a switch, the switches stacked like
+   * rack units in one network cabinet at the left of the picture, the
+   * fullest network's at the top. From each switch's right side a stub
+   * runs into the gutter beside the cabinet to its bus bar, a vertical
+   * line down the picture in the network's hue; the bottom switch's bar
+   * stands innermost, so the fullest bus stands outermost, nearest the
+   * node cabinets, and no stub crosses a bar (those it passes start
+   * lower). Every node on a network stands right of the bars by group,
+   * the groups side by side in order, as many to a row as the stage is
+   * wide: a group's headless nodes (no display) in a server cabinet,
+   * stacked inside it like rack units, and its nodes with a display as
+   * console cards in a column to the cabinet's left. From each card one
+   * tap runs to every bus it is on, in its own lane and never under a
+   * card: out of the card's side into a gutter beside its column (the
+   * servers' to the right of the cabinet, the consoles' to their left),
+   * down to the channel under its row, and along it leftwards to its bar
+   * (the port names stay in the hover card). A stack of more than
+   * UNITS_PER_COLUMN units splits into balanced columns (the switches
+   * never do, their stack being the key to the bars): in a cabinet the
+   * columns stand side by side behind one head and an inner column's taps
+   * run under the next column to the gutter, hidden by the cabinet's back;
+   * console columns each take their own gutter. Each column's taps leave a
+   * little lower than the column before, so no two share a height, and
+   * the lanes of a gutter are dealt lowest tap innermost, so no tap's run
+   * across the gutter crosses another's run down it. The first row is at
+   * least the network cabinet's height, so every channel runs under every
+   * stub. Each node is drawn once. Positions are computed here, so the
+   * graph runs with no layout. */
 
-  var CONTENT_X = 24; // from the lines' start to the first card
-  var LABEL_H = 20; // the cluster label's room above a group's first card
-  var WRAP_GAP = 44; // between rows of cards, room for a cluster label
-  var GRID_GAP = 56; // under the last row of cards, before the first bus
-  var LINE_Y = 24; // the line's offset from the top of the bus node; the name sits above it
-  var BUS_PITCH = 52; // from one bus line to the next
-  var END_PAD = 40; // the lines' run past the last card
-  var MIN_RUN = 160; // the shortest line
-  // The lines are drawn across the visible stage, this far in from its
-  // sides, whatever the zoom or pan (stretchLines); lineSpan holds the
-  // current span in canvas units for the bus markup.
-  var VIEW_MARGIN = 24;
-  var lineSpan = null;
+  var CONTENT_X = 24; // from the picture's left edge to the network cabinet
+  var BUS_PITCH = 18; // from one bar to the next
+  var BUS_W = BUS_PITCH; // a bar's node: the hover band, and the name tag that rides the line
+  var LINE_X = BUS_W / 2; // the line's offset from the node's left: its middle
+  var TAG_PAD = 6; // a tag's clearance from the bar's ends
+  var TAG_STAGGER = 28; // every other bar's tag rides this much lower, so the row of tags breathes
+  var RACK_RULE = 32; // the cabinet's head: the group's name and unit count over a rule
+  var RACK_HEAD = RACK_RULE + 8; // the head and the clearance under its rule, to the first unit
+  var RACK_PAD = 9; // the cabinet's rails: from its frame to the servers
+  var RACK_FOOT = 8; // from the last unit to the cabinet's bottom rim
+  var UNIT_GAP = 3; // between the stacked servers
+  var UNITS_PER_COLUMN = 8; // the most units in one column before a stack splits
+  var COLUMN_GAP = 6; // between the columns of a cabinet
+  var TAP_SHIFT = 1.5; // each column's taps leave this much lower than the column before
+  var CONSOLE_GAP = 12; // between a cabinet and its group's consoles, and between stacked consoles
+  var RACK_GAP = 28; // between groups, and between rows of them
+  var LANE_PITCH = 6; // between the taps running down a gutter
+  var LANE_PAD = 10; // from a column's edge to its first lane, and past its last
+  var GRID_GAP = 56; // from the last bar to the first cabinet
+  var END_PAD = 40; // the bars' run past the last row's channel
+  var LINE_RADIUS = 8; // the corners of every line, within the shortest run (LANE_PAD)
+  var MIN_RUN = 160; // the shortest line down a bar (no node on any network)
 
   function hardwareIndex(msd) {
     var g = msd.graph || {};
@@ -292,6 +343,13 @@
   function groupOf(node) {
     var group = (node || {}).group;
     return !group || group === MISSING ? "" : String(group);
+  }
+
+  // Whether a node has a display: a console rather than a rack server.
+  // "none" is what the inventory says for a headless node.
+  function hasDisplay(node) {
+    var display = (node || {}).display;
+    return !!display && display !== MISSING && String(display).toLowerCase() !== "none";
   }
 
   // A node's tap in words: the network's name, and the device in brackets when known.
@@ -320,134 +378,366 @@
     });
   }
 
-  // The bus open when the picture is first drawn: the first one with nodes.
-  function defaultOpen(msd) {
-    var index = hardwareIndex(msd);
-    var first = orderBuses(index)[0];
-    var open = {};
-    if (first && (index.members[first] || []).length) {
-      open[first] = true;
+  // A stack of cards split into balanced columns of at most
+  // UNITS_PER_COLUMN, filled top to bottom, then left to right.
+  function columnsOf(cards) {
+    var count = Math.ceil(cards.length / UNITS_PER_COLUMN);
+    var per = count ? Math.ceil(cards.length / count) : 0;
+    var columns = [];
+    for (var c = 0; c < count; c += 1) {
+      columns.push(cards.slice(c * per, (c + 1) * per));
     }
-    return open;
+    return columns;
+  }
+
+  // Whether a set of picks lets the key through: every key when none is picked.
+  function picked(set, key) {
+    return !Object.keys(set).length || !!set[key];
   }
 
   // The hardware picture as G6 graph data with positions set (see above),
-  // showing the cards on the buses in `open`.
-  function buildHardware(msd, open) {
+  // narrowed to the networks and groups picked (see filter).
+  function buildHardware(msd, picks) {
     var index = hardwareIndex(msd);
     var labels = {};
     var entries = [];
     var nodes = [];
     var edges = [];
-    open = open || {};
+    picks = picks || { networks: {}, groups: {} };
 
-    // The cards on an open bus, in group order and by name within a group.
+    // The buses shown, in order, and the taps to them alone.
+    var busIds = orderBuses(index).filter(function (id) {
+      return picked(picks.networks, id);
+    });
+    var shownBus = {};
+    busIds.forEach(function (id) {
+      shownBus[id] = true;
+    });
+
+    // The cards: every node of a picked group on a shown network, in group
+    // order (the ungrouped last) and by name within a group.
     var cardIds = Object.keys(index.nodes)
       .filter(function (id) {
-        return (index.homes[id] || []).some(function (link) {
-          return open[link.network];
-        });
+        return (
+          picked(picks.groups, groupOf(index.nodes[id])) &&
+          (index.homes[id] || []).some(function (link) {
+            return shownBus[link.network];
+          })
+        );
       })
       .sort(function (a, b) {
-        return compareText(groupOf(index.nodes[a]), groupOf(index.nodes[b])) || compareText(index.nodes[a].name, index.nodes[b].name);
+        var ga = groupOf(index.nodes[a]);
+        var gb = groupOf(index.nodes[b]);
+        // The ungrouped nodes' cabinet comes last.
+        return (ga === "") - (gb === "") || compareText(ga, gb) || compareText(index.nodes[a].name, index.nodes[b].name);
       });
-    var busIds = orderBuses(index);
 
     // A tap with its network's name in place of the id.
     function namedLink(link) {
       return { name: (index.networks[link.network] || {}).name || link.network, device: link.device, dev_raw: link.dev_raw };
     }
 
-    // One port per tap on each bus: { key, ax }.
+    // One port per tap on each bus: { key, y }.
     var busPorts = {};
     busIds.forEach(function (id) {
       busPorts[id] = [];
     });
 
-    // The lines' content run: the stage's width at the opening zoom (the
-    // root scale), at least MIN_RUN; a row of cards also ends where it would
-    // pass the run's end.
-    var run = Math.max(MIN_RUN, (el.graph ? el.graph.clientWidth : 0) / uiScale() - PADDING_HW[1] - PADDING_HW[3]);
-    var wrapRight = run - END_PAD;
+    // A row of groups ends where it would pass the stage's width at the
+    // opening zoom (the root scale).
+    var wrapRight = Math.max(MIN_RUN, (el.graph ? el.graph.clientWidth : 0) / uiScale() - PADDING_HW[1] - PADDING_HW[3]);
 
-    var x = CONTENT_X;
-    var right = CONTENT_X;
-    var cardTop = LABEL_H;
-    var inRow = 0;
-    var lastGroup = null;
-    cardIds.forEach(function (nodeId) {
-      var node = index.nodes[nodeId];
-      // Its taps: to the open buses only.
-      var links = (index.homes[nodeId] || [])
-        .filter(function (link) {
-          return open[link.network];
-        })
-        .sort(function (a, b) {
-          return busIds.indexOf(a.network) - busIds.indexOf(b.network);
-        });
-      var datum = {
-        id: nodeId,
+    // The network cabinet: a switch unit per shown bus, in bus order, in
+    // one column however many (the stack is the key to the bars); the
+    // cabinet as wide as its switches or its head.
+    var switches = busIds.map(function (busId, k) {
+      var network = index.networks[busId];
+      return {
+        id: busId,
         data: {
-          level: "node",
-          tag: "Node",
-          kind: "node",
-          ref: nodeId,
-          label: node.name,
-          attrs: node,
-          units: index.units[nodeId] || 0,
-          networks: links.map(namedLink),
-          ports: links.map(function (link, i) {
-            return { key: "tap" + i, placement: [(i + 1) / (links.length + 1), 1] };
-          })
+          level: "switch",
+          tag: "Switch",
+          kind: "network",
+          ref: busId,
+          label: network.name,
+          attrs: network,
+          unit: true,
+          count: (index.members[busId] || []).length,
+          color: hueOf(k)
         }
       };
-      var width = widthOf(datum);
-      if (inRow > 0 && x + width > wrapRight) {
-        inRow = 0;
-        x = CONTENT_X;
-        cardTop += BOX_HEIGHT + WRAP_GAP;
+    });
+    var switchColumns = switches.length ? [switches] : [];
+    var switchW = switches.reduce(function (widest, datum) {
+      return Math.max(widest, widthOf(datum));
+    }, MIN_WIDTH);
+    var switchRackW = busIds.length
+      ? Math.max(switchColumns.length * switchW + (switchColumns.length - 1) * COLUMN_GAP + 2 * RACK_PAD, rackHeadWidth("network", busIds.length, "switch"))
+      : 0;
+    switchW = busIds.length ? (switchRackW - 2 * RACK_PAD - (switchColumns.length - 1) * COLUMN_GAP) / switchColumns.length : 0;
+    var switchRackH = busIds.length ? RACK_HEAD + switchColumns[0].length * BOX_HEIGHT + (switchColumns[0].length - 1) * UNIT_GAP + RACK_FOOT : 0;
+    if (busIds.length) {
+      // The cabinet first, so it draws under its switches.
+      nodes.push({
+        id: "rack:network",
+        data: { level: "rack", label: "network", word: "switch", count: busIds.length, w: switchRackW, h: switchRackH },
+        style: { x: CONTENT_X + switchRackW / 2, y: switchRackH / 2, zIndex: 0 }
+      });
+    }
+
+    // The bars in the gutter right of the cabinet, each from its switch's
+    // stub down: the lowest stub's innermost, so no stub crosses a bar
+    // (those it passes start lower); the top (fullest) switch's stands
+    // outermost, nearest the node cabinets (see above).
+    var gutterX = CONTENT_X + switchRackW;
+    var barX = {};
+    var barTop = {};
+    var hues = {};
+    switchColumns.forEach(function (column, c) {
+      column.forEach(function (datum, r) {
+        var top = RACK_HEAD + r * (BOX_HEIGHT + UNIT_GAP);
+        var exit = BOX_HEIGHT / 2 + c * TAP_SHIFT;
+        datum.data.w = switchW;
+        datum.data.ports = [{ key: "out", placement: [1, exit / BOX_HEIGHT] }];
+        datum.style = { x: CONTENT_X + RACK_PAD + c * (switchW + COLUMN_GAP) + switchW / 2, y: top + BOX_HEIGHT / 2, zIndex: 1 };
+        nodes.push(datum);
+        barTop[datum.id] = top + exit;
+        hues[datum.id] = datum.data.color;
+      });
+    });
+    busIds
+      .slice()
+      .sort(function (a, b) {
+        return barTop[b] - barTop[a];
+      })
+      .forEach(function (busId, lane) {
+        barX[busId] = gutterX + LANE_PAD + lane * BUS_PITCH + BUS_W / 2;
+      });
+
+    // The cards grouped into cabinets, in group order.
+    var cabinets = [];
+    cardIds.forEach(function (nodeId) {
+      var group = groupOf(index.nodes[nodeId]);
+      var last = cabinets[cabinets.length - 1];
+      if (!last || last.group !== group) {
+        last = { group: group, ids: [] };
+        cabinets.push(last);
       }
-      inRow += 1;
-      var group = groupOf(node);
-      if (group !== lastGroup) {
-        // The cluster label over the group's first card.
-        lastGroup = group;
-        var text = group || "ungrouped";
-        var labelW = Math.ceil(textWidth("sub", text.toUpperCase()) + 8);
-        nodes.push({
-          id: "glabel:" + nodeId,
-          data: { level: "glabel", label: text, w: labelW, h: LABEL_H - 4 },
-          style: { x: x + labelW / 2, y: cardTop - LABEL_H / 2 - 2 }
+      last.ids.push(nodeId);
+    });
+
+    // The groups start past the bars.
+    var startX = busIds.length ? gutterX + LANE_PAD + (busIds.length - 1) * BUS_PITCH + BUS_W + GRID_GAP : CONTENT_X;
+
+    var x = startX;
+    var rowTop = 0;
+    // The first row is at least the network cabinet's height (see above).
+    var rowH = switchRackH;
+    // The rows of groups, each with the taps its cards drop:
+    // { key, nodeId, i, network, exitY, laneX, node }.
+    var rows = [{ top: 0, taps: [] }];
+    function row() {
+      return rows[rows.length - 1];
+    }
+    cabinets.forEach(function (cabinet) {
+      // The group's cards: the servers as wide as the widest of them, the
+      // consoles likewise.
+      var serverW = MIN_WIDTH;
+      var consoleW = MIN_WIDTH;
+      var servers = [];
+      var consoles = [];
+      cabinet.ids.forEach(function (nodeId) {
+        var node = index.nodes[nodeId];
+        var console_ = hasDisplay(node);
+        // Its taps to the shown buses, in bus order.
+        var links = (index.homes[nodeId] || [])
+          .filter(function (link) {
+            return shownBus[link.network];
+          })
+          .sort(function (a, b) {
+            return busIds.indexOf(a.network) - busIds.indexOf(b.network);
+          });
+        var datum = {
+          id: nodeId,
+          data: {
+            level: "node",
+            tag: "Node",
+            kind: "node",
+            ref: nodeId,
+            label: node.name,
+            attrs: node,
+            unit: !console_,
+            console: console_,
+            units: index.units[nodeId] || 0,
+            networks: links.map(namedLink)
+          }
+        };
+        var card = { datum: datum, node: node, links: links };
+        if (console_) {
+          consoleW = Math.max(consoleW, widthOf(datum));
+          consoles.push(card);
+        } else {
+          serverW = Math.max(serverW, widthOf(datum));
+          servers.push(card);
+        }
+      });
+      var count = servers.length;
+      var serverColumns = columnsOf(servers);
+      var consoleColumns = columnsOf(consoles);
+      // The cabinet is as wide as its columns, or its head when that is longer.
+      var rackW = count
+        ? Math.max(serverColumns.length * serverW + (serverColumns.length - 1) * COLUMN_GAP + 2 * RACK_PAD, rackHeadWidth(cabinet.group || "ungrouped", count))
+        : 0;
+      serverW = count ? (rackW - 2 * RACK_PAD - (serverColumns.length - 1) * COLUMN_GAP) / serverColumns.length : 0;
+      var rackH = count ? RACK_HEAD + serverColumns[0].length * BOX_HEIGHT + (serverColumns[0].length - 1) * UNIT_GAP + RACK_FOOT : 0;
+      var consolesH = consoles.length ? consoleColumns[0].length * BOX_HEIGHT + (consoleColumns[0].length - 1) * CONSOLE_GAP : 0;
+      // A gutter: a lane for every tap the cards beside it drop.
+      function gutterWidth(cards) {
+        var taps = cards.reduce(function (sum, card) {
+          return sum + card.links.length;
+        }, 0);
+        return taps ? LANE_PAD * 2 + (taps - 1) * LANE_PITCH : 0;
+      }
+      // The consoles leave to the left when a cabinet stands at their
+      // right, to the right otherwise, each column into its own gutter;
+      // the servers always to the right of the cabinet.
+      var consolesLeft = count > 0 && consoles.length > 0;
+      var consolesW = consoleColumns.reduce(function (sum, column, c) {
+        return sum + (c ? CONSOLE_GAP : 0) + gutterWidth(column) + consoleW;
+      }, 0);
+      var rightGutter = count ? gutterWidth(servers) : 0;
+      var groupW = consolesW + (consolesLeft ? CONSOLE_GAP : 0) + rackW + rightGutter;
+      var groupH = Math.max(rackH, consolesH);
+      if (x > startX && x + groupW > wrapRight) {
+        // A new row, under the channel the row above needs for its taps.
+        row().bottom = rowTop + rowH;
+        rowTop += rowH + Math.max(RACK_GAP, LANE_PAD * 2 + row().taps.length * LANE_PITCH);
+        rowH = 0;
+        x = startX;
+        rows.push({ top: rowTop, taps: [] });
+      }
+      rowH = Math.max(rowH, groupH);
+
+      // Cards placed ({ card, left, width, top, shift }), their taps
+      // leaving the side `side` ("left" or "right") into the gutter that
+      // starts at `gutterX`: a tap leaves at its own height, the first
+      // bus's highest, `shift` lower in a later column; the lanes are
+      // dealt from the gutter's near edge outward, lowest tap first.
+      function placeCards(placements, side, gutterX) {
+        var taps = [];
+        placements.forEach(function (placement) {
+          var card = placement.card;
+          var datum = card.datum;
+          var nodeId = datum.id;
+          datum.data.w = placement.width;
+          datum.data.ports = [];
+          datum.style = { x: placement.left + placement.width / 2, y: placement.top + BOX_HEIGHT / 2, zIndex: 1 };
+          nodes.push(datum);
+          card.links.forEach(function (link, i) {
+            var exit = (BOX_HEIGHT * (i + 1)) / (card.links.length + 1) + placement.shift;
+            datum.data.ports.push({ key: "tap" + i, placement: [side === "right" ? 1 : 0, exit / BOX_HEIGHT] });
+            taps.push({
+              key: "tap:" + nodeId + ":" + i,
+              nodeId: nodeId,
+              i: i,
+              network: link.network,
+              link: link,
+              node: card.node,
+              exitY: placement.top + exit
+            });
+          });
+          labels[nodeId] = card.node.name;
+          entries.push(nodeEntry(nodeId, card.node, datum.data.networks));
+        });
+        taps.sort(function (a, b) {
+          return b.exitY - a.exitY;
+        });
+        taps.forEach(function (tap, lane) {
+          tap.laneX = side === "right" ? gutterX + LANE_PAD + lane * LANE_PITCH : gutterX - LANE_PAD - lane * LANE_PITCH;
+          row().taps.push(tap);
         });
       }
-      datum.style = { x: x + width / 2, y: cardTop + BOX_HEIGHT / 2 };
-      nodes.push(datum);
-      links.forEach(function (link, i) {
-        var ax = x + width * ((i + 1) / (links.length + 1));
-        var key = "tap:" + nodeId + ":" + i;
-        busPorts[link.network].push({ key: key, ax: ax });
+
+      // A console column's placements down from the row's top.
+      function consolePlacements(column, left) {
+        return column.map(function (card, j) {
+          return { card: card, left: left, width: consoleW, top: rowTop + j * (BOX_HEIGHT + CONSOLE_GAP), shift: 0 };
+        });
+      }
+
+      var cursor = x;
+      if (consolesLeft) {
+        consoleColumns.forEach(function (column, c) {
+          cursor += (c ? CONSOLE_GAP : 0) + gutterWidth(column);
+          placeCards(consolePlacements(column, cursor), "left", cursor);
+          cursor += consoleW;
+        });
+        cursor += CONSOLE_GAP;
+      }
+      if (count) {
+        // The cabinet first, so it draws under its servers.
+        nodes.push({
+          id: "rack:" + cabinet.group,
+          data: { level: "rack", label: cabinet.group || "ungrouped", empty: !cabinet.group, count: count, w: rackW, h: rackH },
+          style: { x: cursor + rackW / 2, y: rowTop + rackH / 2, zIndex: 0 }
+        });
+        var placements = [];
+        serverColumns.forEach(function (column, c) {
+          column.forEach(function (card, j) {
+            placements.push({
+              card: card,
+              left: cursor + RACK_PAD + c * (serverW + COLUMN_GAP),
+              width: serverW,
+              top: rowTop + RACK_HEAD + j * (BOX_HEIGHT + UNIT_GAP),
+              shift: c * TAP_SHIFT
+            });
+          });
+        });
+        placeCards(placements, "right", cursor + rackW);
+        cursor += rackW;
+      } else {
+        consoleColumns.forEach(function (column, c) {
+          cursor += c ? CONSOLE_GAP : 0;
+          placeCards(consolePlacements(column, cursor), "right", cursor + consoleW);
+          cursor += consoleW + gutterWidth(column);
+        });
+      }
+      x += groupW + RACK_GAP;
+    });
+
+    // The taps' runs, the same from every row: a tap drops from its lane to
+    // the channel under its row and runs along it leftwards to its bar,
+    // meeting the bar at the run's height. Along the channel the taps from
+    // further left turn higher, so no run crosses another's drop.
+    row().bottom = rowTop + rowH;
+    rows.forEach(function (r) {
+      var taps = r.taps.slice().sort(function (a, b) {
+        return a.laneX - b.laneX;
+      });
+      var channelY = r.bottom + LANE_PAD;
+      taps.forEach(function (tap) {
+        var points = [[tap.laneX, tap.exitY], [tap.laneX, channelY]];
+        busPorts[tap.network].push({ key: tap.key, y: channelY });
+        channelY += LANE_PITCH;
         edges.push({
-          id: key,
-          source: nodeId,
-          target: link.network,
+          id: tap.key,
+          source: tap.nodeId,
+          target: "bus:" + tap.network,
           data: {
             edge: "tap",
-            sourcePort: "tap" + i,
-            targetPort: key,
-            device: link.device,
-            dev_raw: link.dev_raw,
-            from: node.name,
-            to: (index.networks[link.network] || {}).name
+            color: hues[tap.network],
+            sourcePort: "tap" + tap.i,
+            targetPort: tap.key,
+            points: points,
+            device: tap.link.device,
+            dev_raw: tap.link.dev_raw,
+            from: tap.node.name,
+            to: (index.networks[tap.network] || {}).name
           }
         });
       });
-      x += width + H_GAP;
-      right = Math.max(right, x - H_GAP);
-      labels[nodeId] = node.name;
-      entries.push(nodeEntry(nodeId, node, datum.data.networks));
     });
-
-    // Every node is findable, shown or not: the search opens its buses.
+    // Every node is findable, a card or not (a node on no network has none).
     Object.keys(index.nodes).forEach(function (nodeId) {
       if (cardIds.indexOf(nodeId) !== -1) {
         return;
@@ -457,36 +747,60 @@
       entries.push(nodeEntry(nodeId, node, (index.homes[nodeId] || []).map(namedLink)));
     });
 
-    // The buses under the grid, one line under the other, each the content
-    // run long: the stage's width less its side paddings, so the lines keep
-    // clear of both edges.
-    run = Math.max(run, right + END_PAD);
-    var busW = run;
-    var busH = LINE_Y + 12;
-    var busTop = cardIds.length ? cardTop + BOX_HEIGHT + GRID_GAP : 0;
+    // The bars beside the grid, each from its switch's stub down to one
+    // shared end past the last row's channel, past the cabinet's foot and
+    // at least MIN_RUN below the lowest stub; the stub joins the bar's top.
+    var busBottom = Math.max(switchRackH + END_PAD, cardIds.length ? rowTop + rowH + LANE_PAD * 2 + row().taps.length * LANE_PITCH + END_PAD : 0);
+    busIds.forEach(function (busId) {
+      busBottom = Math.max(busBottom, barTop[busId] + MIN_RUN);
+    });
     busIds.forEach(function (busId) {
       var network = index.networks[busId];
       var count = (index.members[busId] || []).length;
+      var busTop = barTop[busId];
+      var busH = busBottom - busTop;
+      var barId = "bus:" + busId;
       nodes.push({
-        id: busId,
+        id: barId,
         data: {
           level: "bus",
           tag: "Network",
           kind: "network",
+          network: busId,
           label: network.name,
           attrs: network,
           empty: !count,
-          open: !!open[busId],
-          w: busW,
+          w: BUS_W,
           h: busH,
-          run: run,
-          lineY: LINE_Y,
+          labelH: tagLength(network.name),
+          // Alternate bars' tags ride lower (see stickLabels).
+          stagger: ((barX[busId] - gutterX - LANE_PAD - BUS_W / 2) / BUS_PITCH) % 2 ? TAG_STAGGER : 0,
+          color: hues[busId],
           count: count,
-          ports: busPorts[busId].map(function (port) {
-            return { key: port.key, placement: [port.ax / busW, LINE_Y / busH] };
-          })
+          ports: [{ key: "end", placement: [LINE_X / BUS_W, 1] }].concat(
+            busPorts[busId].map(function (port) {
+              return { key: port.key, placement: [LINE_X / BUS_W, (port.y - busTop) / busH] };
+            })
+          )
         },
-        style: { x: run / 2, y: busTop + busH / 2 }
+        style: { x: barX[busId], y: busTop + busH / 2 }
+      });
+      edges.push({
+        id: "stub:" + busId,
+        source: busId,
+        target: barId,
+        data: {
+          edge: "stub",
+          color: hues[busId],
+          empty: !count,
+          sourcePort: "out",
+          targetPort: "end",
+          // Along the stub's height to the bar's line, then down it to the
+          // end: the whole line, drawn in one stroke.
+          points: [[barX[busId] - BUS_W / 2 + LINE_X, barTop[busId]]],
+          from: network.name,
+          to: network.name
+        }
       });
       labels[busId] = network.name;
       entries.push({
@@ -498,7 +812,6 @@
         text: String(network.name).toLowerCase(),
         path: shown(network.purpose)
       });
-      busTop += BUS_PITCH;
     });
 
     return {
@@ -536,6 +849,8 @@
     csc: "lucide-box",
     csu: "lucide-cpu",
     node: "lucide-server",
+    console: "lucide-monitor",
+    switch: "lucide-network",
     topic: "lucide-radio",
     message: "lucide-mail",
     lib: "lucide-library",
@@ -553,7 +868,7 @@
   }
 
   function plural(count, word) {
-    return count + " " + word + (count === 1 ? "" : "s");
+    return count + " " + word + (count === 1 ? "" : /(ch|s|x)$/.test(word) ? "es" : "s");
   }
 
   // What one level down is called, for the count a card shows.
@@ -574,9 +889,13 @@
       case "csu":
         return "CSU · v" + shown(attrs.version);
       case "node":
-        // The group and how many software units run on the node; the
-        // hardware stays in the hover card.
-        return shown(attrs.group) + " · " + plural(data.units || 0, "CSU");
+        // How many software units run on the node, and for a console (drawn
+        // outside the cabinet) its group too, named like its cabinet would
+        // be; the hardware stays in the hover card.
+        return (data.console ? groupOf(attrs) || "ungrouped" : "Node") + " · " + plural(data.units || 0, "CSU");
+      case "switch":
+        // The network's purpose and how many nodes are on it.
+        return shown(attrs.purpose) + " · " + plural(data.count || 0, "node");
       case "group":
         return (GROUP_SUBTITLES[data.label] || "Relation") + " · " + data.count;
       default:
@@ -592,13 +911,16 @@
   // A relation card wears the glyph of what it points at.
   function glyphOf(datum) {
     var data = datum.data || {};
+    if (data.console) {
+      return GLYPHS.console;
+    }
     return GLYPHS[data.level === "group" ? data.kind : data.level] || "lucide-box-select";
   }
 
   // A relation card is the header plus up to LIST_CAP rows; the rest scroll.
   function heightOf(datum) {
     var data = datum.data || {};
-    if (data.level === "bus" || data.level === "glabel") {
+    if (data.level === "bus" || data.level === "rack") {
       return data.h;
     }
     if (data.level !== "group") {
@@ -615,13 +937,34 @@
     title: { font: "600 13px Barlow, sans-serif", spacing: 0.13 },
     sub: { font: "10px Barlow, sans-serif", spacing: 0.3 },
     row: { font: "11.5px Barlow, sans-serif", spacing: 0.23 },
-    toggle: { font: "12px Barlow, sans-serif", spacing: 0 }
+    toggle: { font: "12px Barlow, sans-serif", spacing: 0 },
+    tag: { font: "600 9px Barlow, sans-serif", spacing: 1.08 },
+    rackName: { font: "600 11px Barlow, sans-serif", spacing: 1.54 },
+    rackCount: { font: "10px Barlow, sans-serif", spacing: 1 }
   };
+
+  // From the .bus__tag rule of app.css: the pill's end paddings and borders.
+  var TAG_ENDS = 6 * 2 + 2;
+
+  // The length a name tag takes down its bar.
+  function tagLength(name) {
+    return Math.ceil(textWidth("tag", String(name).toUpperCase()) + TAG_ENDS + 2);
+  }
+
+  // From the rack rules of app.css: the head's paddings and gap, and the
+  // count pill's padding and border.
+  var RACK_HEAD_PAD = { left: 11, right: 8, gap: 10, pill: 8 * 2 + 2 };
+
+  // The cabinet width its head takes for the name beside the count pill, uncut.
+  function rackHeadWidth(name, count, word) {
+    var pill = RACK_HEAD_PAD.pill + textWidth("rackCount", plural(count, word || "node").toUpperCase());
+    return Math.ceil(CARD_BORDER * 2 + RACK_HEAD_PAD.left + textWidth("rackName", String(name).toUpperCase()) + RACK_HEAD_PAD.gap + pill + RACK_HEAD_PAD.right + 4);
+  }
 
   // From the box rules of app.css: the card border, the header's paddings, glyph and gaps,
   // the rows' margins and paddings, and the scrollbar beside long lists.
   var CARD_BORDER = 2;
-  var HEAD_PAD = { left: 11, right: 10, gap: 10, glyph: 20 };
+  var HEAD_PAD = { left: 11, right: 10, gap: 10, glyph: 20, lamp: 14 };
   var ROW_PAD = { margin: 4, side: 10, scrollbar: 12 };
   // Cards never grow past MAX_WIDTH; text that would not fit is cut with an
   // ellipsis and carries the full name as a hover title.
@@ -647,6 +990,10 @@
   // The card width a header takes beyond its text, and the same for a row.
   function headExtra(datum) {
     var extra = CARD_BORDER * 2 + HEAD_PAD.left + HEAD_PAD.glyph + HEAD_PAD.gap + HEAD_PAD.right;
+    if ((datum.data || {}).unit) {
+      // A rack server's status lamp at the end of its front.
+      extra += HEAD_PAD.lamp;
+    }
     return hasChildren(datum) ? extra + HEAD_PAD.gap + textWidth("toggle", "[\u2212]") : extra;
   }
 
@@ -662,7 +1009,9 @@
 
   function widthOf(datum) {
     var data = datum.data || {};
-    if (data.level === "bus" || data.level === "glabel") {
+    // A bus and a cabinet are sized by the build; so is a card in a cabinet,
+    // as wide as the cabinet's widest.
+    if (data.level === "bus" || data.level === "rack" || data.w) {
       return data.w;
     }
     var lines = Math.max(textWidth("title", titleOf(datum)), textWidth("sub", "[" + subtitleOf(datum) + "]"));
@@ -675,7 +1024,7 @@
     }
     // Slack for sub-pixel rounding and the title's synthetic bold, which lands
     // about a pixel wider than measured since Barlow ships at 400 only.
-    return Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.ceil(width) + 3));
+    return Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, Math.ceil(width) + 4));
   }
 
   function escapeHtml(text) {
@@ -702,10 +1051,12 @@
   // data-id is the handle the search uses to find the drawn card.
   function boxHtml(datum, modifier) {
     var data = datum.data || {};
-    var classes = "box box--" + data.level + (modifier ? " " + modifier : "");
+    var classes = "box box--" + data.level + (data.unit ? " box--unit" : "") + (data.console ? " box--console" : "") + (modifier ? " " + modifier : "");
     var toggle = hasChildren(datum) ? '<span class="box__toggle">[' + (G6.isCollapsed(datum) ? "+" : "−") + "]</span>" : "";
+    // A switch wears its bus's hue (see .box--switch in app.css).
+    var vars = data.level === "switch" && data.color ? ' style="--bus:' + data.color + '"' : "";
     return (
-      '<div class="' + classes + '" data-id="' + escapeHtml(datum.id) + '">' +
+      '<div class="' + classes + '" data-id="' + escapeHtml(datum.id) + '"' + vars + ">" +
       '<div class="box__head">' +
       '<i class="box__glyph lucide ' + glyphOf(datum) + '"></i>' +
       '<span class="box__text">' +
@@ -734,68 +1085,87 @@
     return '<div class="list' + (items.length > LIST_CAP ? " list--scroll" : "") + '">' + rows.join("") + "</div>";
   }
 
-  // A bus of the hardware view: the network's name over the left end of the
-  // line with its node count and fold toggle, and the line across the stage
-  // (the purpose stays in the hover card). The box modifiers become bus ones.
+  // A bus of the hardware view: the hover band down the bar (the line is
+  // the network's edge under it) and the name tag riding the line in the
+  // network's hue, read top to bottom. The tag slides down by the bar's
+  // stuck offset, so it stays in view as the picture scrolls
+  // (stickLabels); the node count and purpose stay in the hover card. The
+  // box modifiers become bus ones.
   function busHtml(datum, modifier) {
     var data = datum.data || {};
     var classes = "bus" + (data.empty ? " bus--empty" : "") + (modifier ? " " + modifier.replace(/box--/g, "bus--") : "");
+    var offset = stuck[datum.id] || TAG_PAD + (data.stagger || 0);
     return (
-      '<div class="' + classes + '" data-id="' + escapeHtml(datum.id) + '">' +
-      '<div class="bus__label" style="height:' + (data.lineY - 4) + 'px">' +
-      '<span class="bus__name">' + escapeHtml(data.label) + "</span>" +
-      '<span class="bus__count">' + plural(data.count || 0, "node") + "</span>" +
-      (data.count ? '<span class="bus__toggle">[' + (data.open ? "\u2212" : "+") + "]</span>" : "") +
-      "</div>" +
-      '<div class="bus__line" style="' + lineStyle() + "top:" + (data.lineY - 5) + 'px"></div>' +
+      '<div class="' + classes + '" data-id="' + escapeHtml(datum.id) + '"' + (data.color ? ' style="--bus:' + data.color + '"' : "") + ">" +
+      '<div class="bus__line"></div>' +
+      '<div class="bus__tag" style="top:' + offset + 'px">' + escapeHtml(data.label) + "</div>" +
       "</div>"
     );
   }
 
-  // Where a bus line runs, in the bus node's own units: the current span of
-  // the visible stage when known, the node's width otherwise.
-  function lineStyle() {
-    return lineSpan ? "left:" + lineSpan.left + "px;width:" + lineSpan.width + "px;right:auto;" : "left:0;";
-  }
+  // The tags are sticky: when a bar's top scrolls out under the title
+  // block, its tag slides down the line to stay just under it, as far as
+  // the bar's end. The offsets, in canvas units, are kept for the bus
+  // markup and set on the DOM in place.
+  var stuck = {};
 
-  // Stretches every bus line across the visible stage, VIEW_MARGIN in from
-  // each side, in place: the DOM lines now, and lineSpan for the next draw.
-  function stretchLines() {
-    if (!graph || mode !== "hw" || !el.graph) {
+  function stickLabels() {
+    if (!graph || mode !== "hw" || !el.graph || !tree) {
       return;
     }
-    var size = graph.getSize();
-    var left = graph.getCanvasByViewport([viewPx(VIEW_MARGIN), 0])[0];
-    var right = graph.getCanvasByViewport([size[0] - viewPx(VIEW_MARGIN), 0])[0];
-    lineSpan = { left: left, width: Math.max(0, right - left) };
-    Array.prototype.forEach.call(el.graph.querySelectorAll(".bus__line"), function (line) {
-      line.style.left = lineSpan.left + "px";
-      line.style.width = lineSpan.width + "px";
-      line.style.right = "auto";
+    var viewTop = graph.getCanvasByViewport([0, topClearance()])[1];
+    (tree.data.nodes || []).forEach(function (datum) {
+      var data = datum.data || {};
+      if (data.level !== "bus") {
+        return;
+      }
+      var top = datum.style.y - data.h / 2;
+      var offset = Math.max(TAG_PAD, Math.min(viewTop - top + TAG_PAD, data.h - data.labelH - TAG_PAD - (data.stagger || 0))) + (data.stagger || 0);
+      stuck[datum.id] = offset;
+      var tag = el.graph.querySelector('.bus[data-id="' + datum.id + '"] .bus__tag');
+      if (tag) {
+        tag.style.top = offset + "px";
+      }
     });
   }
 
-  var stretchQueued = false;
+  var stickQueued = false;
 
-  function queueStretch() {
-    if (stretchQueued) {
+  function queueStick() {
+    if (stickQueued) {
       return;
     }
-    stretchQueued = true;
+    stickQueued = true;
     requestAnimationFrame(function () {
-      stretchQueued = false;
-      stretchLines();
+      stickQueued = false;
+      stickLabels();
     });
   }
 
-  // A cluster label of the hardware view's grid: text alone, no states.
-  function labelHtml(datum) {
-    return '<div class="glabel">' + escapeHtml((datum.data || {}).label) + "</div>";
+  // A cabinet of the hardware view: the software view's box as a frame,
+  // its head the group's name in caps beside a pill with the unit count,
+  // over a rule; a rail of mounting holes down each side, the units drawn
+  // over it. No states. The head's and rails' measures go in as CSS
+  // variables, so app.css draws in step with the layout.
+  function rackHtml(datum) {
+    var data = datum.data || {};
+    // The rails' holes keep step with the units: five to a unit pitch.
+    var vars = "--head:" + RACK_HEAD + "px;--rule:" + RACK_RULE + "px;--foot:" + RACK_FOOT + "px;--rail:" + RACK_PAD + "px;--pitch:" + (BOX_HEIGHT + UNIT_GAP) / 5 + "px";
+    return (
+      '<div class="rack" data-id="' + escapeHtml(datum.id) + '" style="' + vars + '">' +
+      '<div class="rack__head">' +
+      '<span class="rack__name">' + escapeHtml(data.label) + "</span>" +
+      '<span class="rack__count">' + plural(data.count || 0, data.word || "node") + "</span>" +
+      "</div>" +
+      '<div class="rack__rail rack__rail--left"></div>' +
+      '<div class="rack__rail rack__rail--right"></div>' +
+      "</div>"
+    );
   }
 
   function htmlOf(datum, modifier) {
     var level = (datum.data || {}).level;
-    return level === "bus" ? busHtml(datum, modifier) : level === "glabel" ? labelHtml(datum) : boxHtml(datum, modifier);
+    return level === "bus" ? busHtml(datum, modifier) : level === "rack" ? rackHtml(datum) : boxHtml(datum, modifier);
   }
 
   function nodeStyle(datum) {
@@ -818,11 +1188,11 @@
         { key: "left", placement: "left" },
         { key: "tail", placement: [TAIL / width, 1] }
       ],
-      cursor: data.level === "bus" || data.level === "glabel" ? "default" : hasChildren(datum) || data.ref ? "pointer" : "default",
-      // A bus is mostly empty space over the lines: only its label, line and
-      // cluster names take the pointer (see .bus in app.css); a cluster label
-      // takes none.
-      pointerEvents: data.level === "bus" || data.level === "glabel" ? "none" : "auto"
+      cursor: data.level === "bus" || data.level === "rack" ? "default" : hasChildren(datum) || data.ref ? "pointer" : "default",
+      // A bus is mostly empty space over the lines: only its label and line
+      // take the pointer (see .bus in app.css); a cabinet takes none, so its
+      // cards and the taps under it stay hoverable.
+      pointerEvents: data.level === "bus" || data.level === "rack" ? "none" : "auto"
     };
   }
 
@@ -1053,11 +1423,45 @@
     };
   }
 
-  // The taps of the hardware view run straight, port to port, from a card's
-  // foot down to a bus; the device name stays in the hover card.
+  // A tap of the hardware view: out of the card's side to its lane, down
+  // to the channel under its row and along it to its bar, with rounded
+  // corners and a dot where it joins the bar, since its run crosses the
+  // bars it passes; the device name stays in the hover card.
+  // A network's line: from the switch's side, round the corner and down
+  // the bar to its end, one 2px glowing stroke in the network's hue (the
+  // bar node under it is only the hover band and the taps' ports); dashed
+  // when no node is on it.
   function hardwareEdgeStyle(edge) {
     var data = edge.data || {};
-    return { router: false, sourcePort: data.sourcePort, targetPort: data.targetPort };
+    if (data.edge === "stub") {
+      return {
+        router: false,
+        controlPoints: data.points || [],
+        radius: LINE_RADIUS,
+        sourcePort: data.sourcePort,
+        targetPort: data.targetPort,
+        stroke: data.color,
+        lineWidth: 2,
+        lineDash: data.empty ? [6, 5] : undefined,
+        shadowColor: withAlpha(data.color, 0.6),
+        shadowBlur: 8,
+        endArrow: false
+      };
+    }
+    var color = data.color ? withAlpha(data.color, 0.7) : COLOR.line;
+    return {
+      router: false,
+      controlPoints: data.points || [],
+      radius: LINE_RADIUS,
+      sourcePort: data.sourcePort,
+      targetPort: data.targetPort,
+      stroke: color,
+      endArrow: true,
+      endArrowType: "circle",
+      endArrowSize: 5,
+      endArrowFill: color,
+      endArrowStroke: color
+    };
   }
 
   /* -------------------------------------------------------------- tooltip */
@@ -1120,6 +1524,10 @@
     }
     var data = datum.data;
     var attrs = data.attrs || {};
+    if (data.edge === "stub") {
+      // A switch's stub says nothing its switch does not.
+      return "";
+    }
     if (data.edge) {
       // A line of the hardware view: the port it leaves by and what it joins.
       return tipCard(data.from + " \u2014 " + data.to, "Connects to", function (rows) {
@@ -1141,6 +1549,7 @@
           row(rows, "Id", datum.id);
           break;
         case "bus":
+        case "switch":
           row(rows, "Purpose", attrs.purpose);
           row(rows, "Nodes", data.count);
           row(rows, "Id", attrs.id);
@@ -1283,25 +1692,41 @@
         }
       },
       edge: {
-        type: mode === "hw" ? "line" : "polyline",
+        type: "polyline",
         style: function (edge) {
           var style = edgeStyle(edge);
           if (mode !== "hw") {
             style.radius = 6;
           }
-          style.stroke = COLOR.line;
-          style.lineWidth = 1.25;
+          style.stroke = style.stroke || COLOR.line;
+          style.lineWidth = style.lineWidth || 1.25;
           return style;
         },
         state: {
           // Lit white, like the hovered card: no halo, since the rows of a
           // list share one trunk and G6's halo would stack into a thick band.
-          active: { stroke: "#ffffff", lineWidth: 1.75, halo: false }
+          active: { stroke: "#ffffff", lineWidth: 1.75, halo: false },
+          // A network's line found by the search: the mark's gold (see --mark in app.css).
+          highlight: { stroke: "#ffd166", lineWidth: 2.5, shadowColor: "rgba(255, 209, 102, 0.6)", shadowBlur: 10, halo: false }
         }
       },
-      // Pan, zoom and click to expand or collapse (req 43); the hardware
-      // view has nothing to fold.
-      behaviors: ["drag-canvas", "zoom-canvas"]
+      // Pan, zoom and click to expand or collapse (req 43). The hardware
+      // picture is tall and narrow, so its wheel scrolls it up and down, and
+      // zooms with Ctrl or Cmd held (a trackpad pinch arrives as a Ctrl
+      // wheel too: see wheelZoom); it has nothing to fold.
+      behaviors: ["drag-canvas"]
+        .concat(
+          mode === "hw"
+            ? {
+                type: "scroll-canvas",
+                key: "scroll",
+                direction: "y",
+                enable: function (event) {
+                  return !event.ctrlKey && !event.metaKey;
+                }
+              }
+            : "zoom-canvas"
+        )
         .concat(
           mode === "hw"
             ? []
@@ -1334,7 +1759,7 @@
             if (event.targetType === "edge") {
               return !!datum.data.edge;
             }
-            return datum.data.level !== "group" && datum.data.level !== "glabel" && event.targetType === "node";
+            return datum.data.level !== "group" && datum.data.level !== "rack" && event.targetType === "node";
           },
           getContent: function (event, items) {
             return Promise.resolve(tooltipFor(event, items));
@@ -1345,10 +1770,11 @@
   }
 
   function render(msd) {
-    openBuses = mode === "hw" ? defaultOpen(msd) : {};
-    tree = mode === "hw" ? buildHardware(msd, openBuses) : buildTree(msd);
+    filter = { networks: {}, groups: {} };
+    tree = mode === "hw" ? buildHardware(msd, filter) : buildTree(msd);
     lit = null;
     resetChips();
+    fillFilters(mode === "hw" ? hardwareIndex(msd) : null);
     pending = Promise.resolve();
     if (graph) {
       graph.destroy();
@@ -1359,9 +1785,28 @@
     // its rows' scroll; bring the lit row back into view.
     graph.on("node:pointerenter", relitRow);
     graph.on("node:pointerleave", relitRow);
-    // The hardware view's lines follow the view (see stretchLines).
-    lineSpan = null;
-    graph.on("aftertransform", queueStretch);
+    // The bars' tags follow the view (see stickLabels).
+    stuck = {};
+    graph.on("aftertransform", queueStick);
+    // A hovered node lights its networks' lines and switches too: the
+    // hover reaches its taps and the bands at their ends, not the lines
+    // drawn under the bands (see hardwareEdgeStyle).
+    graph.on("node:pointerenter", function (event) {
+      lightLines(event, true);
+    });
+    graph.on("node:pointerleave", function (event) {
+      lightLines(event, false);
+    });
+    // A click keeps the hover's lighting until the next click.
+    if (mode === "hw") {
+      graph.on("node:click", function (event) {
+        pin(event.target && event.target.id);
+      });
+      graph.on("canvas:click", function () {
+        pin(null);
+      });
+    }
+    pinned = null;
     // For the browser console and the page's tests.
     window.dsmGraph = graph;
     return graph
@@ -1422,8 +1867,7 @@
     nodes.forEach(function (node) {
       var data = node.data || {};
       var h = heightOf(node);
-      // A bus counts for its content run, not the reach of its line.
-      var w = data.level === "bus" ? data.run : widthOf(node);
+      var w = widthOf(node);
       left = Math.min(left, node.style.x - w / 2);
       right = Math.max(right, node.style.x + w / 2);
       top = Math.min(top, node.style.y - h / 2);
@@ -1438,7 +1882,7 @@
         var at = graph.getViewportByCanvas([left, top]);
         return graph.translateBy([pad[3] - at[0], topClearance() - at[1]], false);
       })
-      .then(stretchLines);
+      .then(stickLabels);
   }
 
   function fitPicture() {
@@ -1467,72 +1911,6 @@
     }
     pending = pending.then(function () {
       return rebuild(open);
-    });
-    return pending;
-  }
-
-  /* The hardware view's fold: the open buses' cards are rebuilt in place,
-   * and the view shifts so the bus toggled stays where it was. */
-
-  function rebuildHardware(anchorId) {
-    hideTooltip();
-    var before = anchorId && nodeData(anchorId) ? graph.getViewportByCanvas([0, nodeData(anchorId).style.y])[1] : null;
-    // The find's gold comes off first: G6 keeps an element's states across
-    // setData, so a card lit before the rebuild would stay gold.
-    return clearLit()
-      .then(function () {
-        tree = buildHardware(lastModel, openBuses);
-        graph.setData(tree.data);
-        return graph.render();
-      })
-      .then(function () {
-        renderResults();
-        var shift = 0;
-        if (before !== null && nodeData(anchorId)) {
-          shift = before - graph.getViewportByCanvas([0, nodeData(anchorId).style.y])[1];
-        }
-        // Cards open above the lines: when the grid's top would land under the
-        // title block, the view shifts down to show it instead.
-        var top = Infinity;
-        (tree.data.nodes || []).forEach(function (node) {
-          top = Math.min(top, node.style.y - heightOf(node) / 2);
-        });
-        if (top !== Infinity) {
-          var topAt = graph.getViewportByCanvas([0, top])[1] + shift;
-          shift += Math.max(0, topClearance() - topAt);
-        }
-        return (shift ? graph.translateBy([0, shift], false) : Promise.resolve()).then(stretchLines);
-      });
-  }
-
-  function toggleBus(busId) {
-    if (!graph || mode !== "hw" || !tree || !tree.entities.network[busId]) {
-      return Promise.resolve();
-    }
-    pending = pending.then(function () {
-      if (openBuses[busId]) {
-        delete openBuses[busId];
-      } else {
-        openBuses[busId] = true;
-      }
-      return rebuildHardware(busId);
-    });
-    return pending;
-  }
-
-  // Every bus open (all cards shown) or closed (the lines alone).
-  function foldBuses(open) {
-    if (!graph || mode !== "hw" || !tree) {
-      return Promise.resolve();
-    }
-    pending = pending.then(function () {
-      openBuses = {};
-      if (open) {
-        Object.keys(tree.entities.network).forEach(function (id) {
-          openBuses[id] = true;
-        });
-      }
-      return rebuildHardware(null);
     });
     return pending;
   }
@@ -1746,8 +2124,24 @@
   function light(nodeId, ref) {
     return clearLit().then(function () {
       lit = { nodeId: nodeId, ref: ref === undefined ? null : ref };
-      return withState(nodeId, "highlight", true);
+      return withState(nodeId, "highlight", true).then(function () {
+        return lightBar(nodeId, true);
+      });
     });
+  }
+
+  // A switch's bar lights with it (a filtered-out bus has none).
+  function lightBar(nodeId, on) {
+    var datum = nodeData(nodeId);
+    if (!datum || (datum.data || {}).level !== "switch") {
+      return Promise.resolve();
+    }
+    try {
+      graph.getEdgeData("stub:" + nodeId);
+    } catch (error) {
+      return Promise.resolve();
+    }
+    return withState("stub:" + nodeId, "highlight", on);
   }
 
   function clearLit() {
@@ -1756,7 +2150,11 @@
     }
     var old = lit;
     lit = null;
-    return graph && nodeData(old.nodeId) ? withState(old.nodeId, "highlight", false) : Promise.resolve();
+    return graph && nodeData(old.nodeId)
+      ? withState(old.nodeId, "highlight", false).then(function () {
+          return lightBar(old.nodeId, false);
+        })
+      : Promise.resolve();
   }
 
   // The drawn card of a box; ids hold ":" and "/", so no selector is built from them.
@@ -1783,6 +2181,85 @@
     }
   }
 
+  // What a card in the hardware view reaches: for a node, its taps, the
+  // bars and lines of its networks and their switches; for a switch, its
+  // line and bar, its nodes and their taps to it. The card itself first.
+  function reachOf(id) {
+    var datum = mode === "hw" && tree ? nodeData(id) : null;
+    var level = datum ? (datum.data || {}).level : null;
+    var ids = [];
+    if (level === "node") {
+      ids.push(id);
+      graph.getEdgeData().forEach(function (edge) {
+        if ((edge.data || {}).edge === "tap" && edge.source === id) {
+          ids.push(edge.id, edge.target);
+        }
+      });
+      (tree.homes[id] || []).forEach(function (link) {
+        ids.push("stub:" + link.network, link.network);
+      });
+    } else if (level === "switch") {
+      ids.push(id, "stub:" + id, "bus:" + id);
+      graph.getEdgeData().forEach(function (edge) {
+        if ((edge.data || {}).edge === "tap" && edge.target === "bus:" + id) {
+          ids.push(edge.id, edge.source);
+        }
+      });
+    }
+    return ids.filter(function (each) {
+      try {
+        graph.getElementState(each);
+      } catch (error) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  // Lights or unlights a card's reach as the hover does.
+  function lightReach(id, on) {
+    return Promise.all(
+      reachOf(id).map(function (each) {
+        return withState(each, "active", on);
+      })
+    );
+  }
+
+  // A hovered card lights its reach beyond what hover-activate reaches
+  // (its neighbours alone), and unlights it on leaving; a pinned card's
+  // reach is put back after any leave, since the hover's own unlighting
+  // may have crossed it.
+  function lightLines(event, on) {
+    if (!event.target || mode !== "hw" || !tree) {
+      return;
+    }
+    lightReach(event.target.id, on).then(function () {
+      if (!on && pinned && graph) {
+        lightReach(pinned, true);
+      }
+    });
+  }
+
+  // The card whose reach stays lit after a click (hardware view): clicking
+  // it again, another card, or the canvas lets it go.
+  var pinned = null;
+
+  function pin(id) {
+    var old = pinned;
+    pinned = null;
+    var released = old && graph && nodeData(old) ? lightReach(old, false) : Promise.resolve();
+    if (!id || id === old) {
+      return released;
+    }
+    return released.then(function () {
+      if (!graph || !reachOf(id).length) {
+        return undefined;
+      }
+      pinned = id;
+      return lightReach(id, true);
+    });
+  }
+
   function relitRow(event) {
     if (lit && event.target && event.target.id === lit.nodeId) {
       requestAnimationFrame(scrollLitRow);
@@ -1804,29 +2281,6 @@
       parent = tree.parents[parent];
     }
     pending = pending
-      .then(function () {
-        // In the hardware view a picked bus opens, and a hidden card's buses open.
-        if (mode !== "hw") {
-          return undefined;
-        }
-        var need = [];
-        if (tree.entities.network[nodeId]) {
-          if (!openBuses[nodeId]) {
-            need.push(nodeId);
-          }
-        } else if (!nodeData(nodeId)) {
-          (tree.homes[nodeId] || []).forEach(function (link) {
-            need.push(link.network);
-          });
-        }
-        if (!need.length) {
-          return undefined;
-        }
-        need.forEach(function (id) {
-          openBuses[id] = true;
-        });
-        return rebuildHardware(null);
-      })
       .then(function () {
         return chain.reduce(function (step, id) {
           return step.then(function () {
@@ -1857,6 +2311,87 @@
     }
   }
 
+  /* The hardware view's filters (the panel's .gfilter): a chip per
+   * network, in bus order and in its hue, and a chip per node group. A
+   * pressed chip narrows the picture to it; none pressed in a row means
+   * every one. The chips are made afresh for every model. */
+
+  function fillFilters(index) {
+    if (!el.filter) {
+      return;
+    }
+    var networks = el.filter.querySelector('[data-filter="networks"]');
+    var groups = el.filter.querySelector('[data-filter="groups"]');
+    networks.innerHTML = "";
+    groups.innerHTML = "";
+    if (!index) {
+      el.filter.hidden = true;
+      return;
+    }
+    orderBuses(index).forEach(function (busId, k) {
+      networks.appendChild(filterChip("networks", busId, index.networks[busId].name, hueOf(k)));
+    });
+    var seen = {};
+    Object.keys(index.nodes).forEach(function (nodeId) {
+      seen[groupOf(index.nodes[nodeId])] = true;
+    });
+    Object.keys(seen)
+      .sort(function (a, b) {
+        return (a === "") - (b === "") || compareText(a, b);
+      })
+      .forEach(function (group) {
+        groups.appendChild(filterChip("groups", group, group || "ungrouped", null));
+      });
+    networks.parentNode.hidden = !networks.childNodes.length;
+    groups.parentNode.hidden = !groups.childNodes.length;
+    el.filter.hidden = !networks.childNodes.length && !groups.childNodes.length;
+  }
+
+  function filterChip(set, key, label, hue) {
+    var chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "gsearch__chip gfilter__chip";
+    chip.setAttribute("aria-pressed", "false");
+    if (hue) {
+      chip.style.setProperty("--bus", hue);
+      var dot = document.createElement("i");
+      dot.className = "gfilter__dot";
+      chip.appendChild(dot);
+    }
+    chip.appendChild(document.createTextNode(label));
+    chip.addEventListener("click", function () {
+      var on = chip.getAttribute("aria-pressed") !== "true";
+      chip.setAttribute("aria-pressed", on ? "true" : "false");
+      if (on) {
+        filter[set][key] = true;
+      } else {
+        delete filter[set][key];
+      }
+      refilter();
+    });
+    return chip;
+  }
+
+  // Redraws the hardware picture under the current filter, fitted anew.
+  function refilter() {
+    if (!graph || mode !== "hw" || !lastModel) {
+      return Promise.resolve();
+    }
+    hideTooltip();
+    pending = pending
+      .then(clearLit)
+      .then(function () {
+        tree = buildHardware(lastModel, filter);
+        graph.setData(tree.data);
+        return graph.render();
+      })
+      .then(function () {
+        renderResults();
+        return fitHardware();
+      });
+    return pending;
+  }
+
   // The panel's parts and listeners, taken once with the container.
   function wirePanel(panel) {
     el.panel = panel;
@@ -1864,6 +2399,7 @@
     el.clear = panel.querySelector(".gsearch__clear");
     el.count = panel.querySelector(".gsearch__count");
     el.results = panel.querySelector(".gsearch__results");
+    el.filter = panel.querySelector(".gfilter");
     el.input.addEventListener("input", function () {
       cursor = -1;
       renderResults();
@@ -1917,6 +2453,23 @@
 
   // Takes the container once, with the rows' hover card and wheel listeners
   // on it. The search panel is optional: without one the search is inert.
+  // Zooms the hardware picture about the pointer by a wheel step, within
+  // the graph's zoom range (see makeGraph); other wheels pass to G6.
+  function wheelZoom(event) {
+    if (!graph || mode !== "hw" || !(event.ctrlKey || event.metaKey)) {
+      return;
+    }
+    event.preventDefault();
+    // A mouse notch (about 100) zooms by a fifth; a pinch's small deltas
+    // come in a smooth run of smaller steps.
+    var step = Math.max(-200, Math.min(200, -event.deltaY));
+    var zoom = graph.getZoom() * Math.exp(step * 0.002);
+    var cap = uiScale();
+    zoom = Math.max(0.2 * cap, Math.min(3 * cap, zoom));
+    var rect = el.graph.getBoundingClientRect();
+    graph.zoomTo(zoom, false, [event.clientX - rect.left, event.clientY - rect.top]);
+  }
+
   function mount(container, panel) {
     if (mounted) {
       return;
@@ -1930,14 +2483,9 @@
     el.rowTip.className = "tooltip tooltip--row";
     el.rowTip.hidden = true;
     el.graph.appendChild(el.rowTip);
-    // A click on a bus's name or toggle folds its cards in or out.
-    el.graph.addEventListener("click", function (event) {
-      var label = closest(event, ".bus__label");
-      var bus = label && label.closest(".bus");
-      if (bus) {
-        toggleBus(bus.getAttribute("data-id"));
-      }
-    });
+    // The hardware view zooms on a Ctrl or Cmd wheel, and on a trackpad
+    // pinch, which the browser delivers as a wheel with ctrlKey set.
+    el.graph.addEventListener("wheel", wheelZoom, { passive: false });
     el.graph.addEventListener("mouseover", function (event) {
       var rowEl = closest(event, ".list__row");
       if (rowEl) {
@@ -1974,7 +2522,7 @@
     window.addEventListener("resize", function () {
       if (graph) {
         graph.resize();
-        queueStretch();
+        queueStick();
       }
     });
   }
@@ -2020,6 +2568,7 @@
       graph = null;
     }
     lit = null;
+    pinned = null;
     tree = null;
     lastModel = null;
     if (el.panel) {
@@ -2033,11 +2582,12 @@
     load: load,
     fit: fit,
     resize: resize,
+    // The hardware picture has nothing to fold.
     expandToCsu: function () {
-      return mode === "hw" ? foldBuses(true) : queueRebuild(true);
+      return mode === "hw" ? Promise.resolve() : queueRebuild(true);
     },
     collapseAll: function () {
-      return mode === "hw" ? foldBuses(false) : queueRebuild(false);
+      return mode === "hw" ? Promise.resolve() : queueRebuild(false);
     },
     destroy: destroy
   };

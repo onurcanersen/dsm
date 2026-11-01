@@ -48,12 +48,13 @@
 
   // The hardware view's networks each take a hue, dealt in bus order, so a
   // line, its switch's lamp, its chip and its taps read as one network at
-  // a glance: the app's cyan first, then nine instrument hues at the same
-  // brightness, warm and cool alternating so neighbours in the order never
-  // look alike (adjacent pairs checked for colour-blind separation; the
-  // one weak pair, mint beside rose, is covered by the names on the
-  // switches and chips).
-  var HUES = ["#22e6f5", "#ff9a3c", "#3d7dff", "#c1e34a", "#ff5fc4", "#9d7bff", "#2fd68e", "#ff5f6d", "#e3b94f", "#5ec8ff"];
+  // a glance: the app's cyan first, then nine softened instrument hues
+  // (lavender, amber, aqua, gold, coral, green, indigo, tan, blue), warm
+  // and cool alternating at varied brightness so neighbours in the order
+  // never look alike: every adjacent pair clears the colour-blind
+  // separation floor (OKLab, protan and deutan simulated) and the
+  // normal-vision floor on the page's dark surface.
+  var HUES = ["#22e6f5", "#aa95e8", "#f2a618", "#3ce8ce", "#e3cb53", "#e6867a", "#7ae78d", "#7d8bdb", "#de8f57", "#6ba5fb"];
 
   function hueOf(k) {
     return HUES[k % HUES.length];
@@ -419,8 +420,11 @@
     var edges = [];
     picks = picks || { networks: {}, groups: {} };
 
-    // The buses shown, in order, and the taps to them alone.
-    var busIds = orderBuses(index).filter(function (id) {
+    // The buses shown, in order, and the taps to them alone. A network's
+    // hue follows its place in the full order, so a filter that drops
+    // some never repaints the rest (the chips keep the same hues).
+    var allBuses = orderBuses(index);
+    var busIds = allBuses.filter(function (id) {
       return picked(picks.networks, id);
     });
     var shownBus = {};
@@ -464,7 +468,7 @@
     // The network cabinet: a switch unit per shown bus, in bus order, in
     // one column however many (the stack is the key to the bars); the
     // cabinet as wide as its switches or its head.
-    var switches = busIds.map(function (busId, k) {
+    var switches = busIds.map(function (busId) {
       var network = index.networks[busId];
       return {
         id: busId,
@@ -477,7 +481,7 @@
           attrs: network,
           unit: true,
           count: (index.members[busId] || []).length,
-          color: hueOf(k)
+          color: hueOf(allBuses.indexOf(busId))
         }
       };
     });
@@ -2393,6 +2397,19 @@
     }
     hideTooltip();
     hideRowTip();
+    if (!nodeData(nodeId)) {
+      // A card the hardware filter keeps off the picture: the filter is
+      // released and the picture redrawn whole, then the card is found.
+      if (mode === "hw" && (Object.keys(filter.networks).length || Object.keys(filter.groups).length)) {
+        filter = { networks: {}, groups: {} };
+        pressFilterChips();
+        return refilter().then(function () {
+          return nodeData(nodeId) ? goTo(nodeId, ref) : undefined;
+        });
+      }
+      // A node on no network has no card.
+      return Promise.resolve();
+    }
     var chain = [];
     var parent = tree.parents[nodeId];
     while (parent) {
@@ -2536,8 +2553,11 @@
       cursor = -1;
       renderResults();
     });
+    // The clear button empties the query and, like Escape, takes the find's
+    // light off the picture (a switch's line and bar with it).
     el.clear.addEventListener("click", function () {
       clearQuery();
+      clearLit();
       el.input.focus();
     });
     Array.prototype.forEach.call(panel.querySelectorAll(".gsearch__chip"), function (chip) {

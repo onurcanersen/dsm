@@ -537,46 +537,54 @@
 
             <!-- Search of the tree: boxes, rows and relation cards by name,
                  narrowed by type; a pick opens, centres and lights it (req 43). -->
-            <div class="gsearch" id="graph-search" hidden>
-              <label class="gsearch__field">
-                <i class="lucide lucide-search"></i>
-                <input
-                  type="text"
-                  placeholder="SEARCH"
-                  aria-label="Search the system hierarchy"
-                  aria-controls="graph-search-results"
-                  autocomplete="off"
-                  autocapitalize="none"
-                  spellcheck="false"
-                />
-                <button type="button" class="gsearch__clear" aria-label="Clear" title="Clear" hidden>
-                  <i class="lucide lucide-x"></i>
-                </button>
-              </label>
-              <div class="gsearch__chips" aria-label="Filter by type">
-                <button type="button" class="gsearch__chip" data-type="hierarchy" data-mode="sw" aria-pressed="false">Hierarchy</button>
-                <button type="button" class="gsearch__chip" data-type="csu" data-mode="sw" aria-pressed="false">CSU</button>
-                <button type="button" class="gsearch__chip" data-type="node" aria-pressed="false">Node</button>
-                <button type="button" class="gsearch__chip" data-type="network" data-mode="hw" aria-pressed="false">Network</button>
-                <button type="button" class="gsearch__chip" data-type="topic" data-mode="sw" aria-pressed="false">Topic</button>
-                <button type="button" class="gsearch__chip" data-type="message" data-mode="sw" aria-pressed="false">Message</button>
-                <button type="button" class="gsearch__chip" data-type="lib" data-mode="sw" aria-pressed="false">Library</button>
-                <button type="button" class="gsearch__chip" data-type="relation" data-mode="sw" aria-pressed="false">Relation</button>
-              </div>
-              <!-- The hardware view's filters: a chip per network and per
-                   node group, filled by graph.js for each model. -->
-              <div class="gfilter" data-mode="hw" hidden>
-                <div class="gfilter__row" hidden>
-                  <span class="gfilter__title">Networks</span>
-                  <div class="gfilter__chips" data-filter="networks" aria-label="Filter by network"></div>
+            <div class="gsearch mpanel" id="graph-search" hidden>
+              <div class="mpanel__blur"></div>
+              <div class="mpanel__corners"></div>
+              <div class="mpanel__body gsearch__body">
+                <label class="field gsearch__field">
+                  <i class="lucide lucide-search"></i>
+                  <input
+                    type="text"
+                    placeholder="Search"
+                    aria-label="Search the system hierarchy"
+                    aria-controls="graph-search-results"
+                    autocomplete="off"
+                    autocapitalize="none"
+                    spellcheck="false"
+                  />
+                  <button type="button" class="gsearch__clear" aria-label="Clear" title="Clear" hidden>
+                    <i class="lucide lucide-x"></i>
+                  </button>
+                </label>
+                <!-- The type chips, in a titled row like the hardware view's filters. -->
+                <div class="gfilter__row">
+                  <span class="gfilter__title">Types</span>
+                  <div class="gsearch__chips gfilter__chips" aria-label="Filter by type">
+                    <button type="button" class="gsearch__chip" data-type="hierarchy" data-mode="sw" aria-pressed="false">Hierarchy</button>
+                    <button type="button" class="gsearch__chip" data-type="csu" data-mode="sw" aria-pressed="false">CSU</button>
+                    <button type="button" class="gsearch__chip" data-type="node" aria-pressed="false">Node</button>
+                    <button type="button" class="gsearch__chip" data-type="network" data-mode="hw" aria-pressed="false">Network</button>
+                    <button type="button" class="gsearch__chip" data-type="topic" data-mode="sw" aria-pressed="false">Topic</button>
+                    <button type="button" class="gsearch__chip" data-type="message" data-mode="sw" aria-pressed="false">Message</button>
+                    <button type="button" class="gsearch__chip" data-type="lib" data-mode="sw" aria-pressed="false">Library</button>
+                    <button type="button" class="gsearch__chip" data-type="relation" data-mode="sw" aria-pressed="false">Relation</button>
+                  </div>
                 </div>
-                <div class="gfilter__row" hidden>
-                  <span class="gfilter__title">Groups</span>
-                  <div class="gfilter__chips" data-filter="groups" aria-label="Filter by node group"></div>
+                <!-- The hardware view's filters: a chip per network and per
+                     node group, filled by graph.js for each model. -->
+                <div class="gfilter" data-mode="hw" hidden>
+                  <div class="gfilter__row" hidden>
+                    <span class="gfilter__title">Networks</span>
+                    <div class="gfilter__chips" data-filter="networks" aria-label="Filter by network"></div>
+                  </div>
+                  <div class="gfilter__row" hidden>
+                    <span class="gfilter__title">Groups</span>
+                    <div class="gfilter__chips" data-filter="groups" aria-label="Filter by node group"></div>
+                  </div>
                 </div>
+                <p class="gsearch__count" role="status" hidden></p>
+                <div class="gsearch__results" id="graph-search-results" role="listbox" hidden></div>
               </div>
-              <p class="gsearch__count" role="status" hidden></p>
-              <div class="gsearch__results" id="graph-search-results" role="listbox" hidden></div>
             </div>
 
             <div class="graph__stage" id="graph-stage">

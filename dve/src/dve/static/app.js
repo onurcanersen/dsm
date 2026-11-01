@@ -215,9 +215,24 @@
 
   // Every change of view plays the card's entrance; a change mid-flight restarts it.
   function playCardIn() {
-    el.card.classList.remove("card--in");
-    void el.card.offsetWidth;
-    el.card.classList.add("card--in");
+    playIn(el.card);
+  }
+
+  // Replays the card's entrance on an element: the same fade and rise the
+  // graph stage plays when its picture changes. The class goes once the
+  // animation ends: an element animating opacity stacks on its own, which
+  // would hold the canvas's hover cards under the fixed search panel.
+  function playIn(node) {
+    node.classList.remove("card--in");
+    void node.offsetWidth;
+    node.classList.add("card--in");
+    node.addEventListener(
+      "animationend",
+      function () {
+        node.classList.remove("card--in");
+      },
+      { once: true }
+    );
   }
 
   function renderStepper(name) {
@@ -2101,6 +2116,8 @@
           graphModel = model;
           graphDrawnMode = drawing;
           el.graphLoading.hidden = true;
+          // The new picture enters as a card does on a change of view.
+          playIn(el.graphCanvas);
         })
         .catch(function (error) {
           el.graphLoading.hidden = true;

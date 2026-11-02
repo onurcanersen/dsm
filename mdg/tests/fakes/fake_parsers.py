@@ -69,7 +69,7 @@ def ansible_repo_parser_class(calls: Calls):
             ]
 
         def get_networks(self):
-            return [Network(seed.SWITCH_0, purpose="backbone")]
+            return [Network(seed.SWITCH_0, bandwidth=1.0)]
 
         def get_connects_to(self):
             return [

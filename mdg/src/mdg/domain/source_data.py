@@ -104,9 +104,10 @@ class Node:
 
 @dataclass(frozen=True)
 class Network:
-    """A network the ansible repo declares, with its purpose (SRS DSM-MDG req 2.4, 3)."""
+    """A network the ansible repo declares, with its bandwidth in Gb/s
+    (SRS DSM-MDG req 2.4, 3)."""
     name: str
-    purpose: Optional[str] = None
+    bandwidth: Optional[float] = None
 
 
 @dataclass(frozen=True)

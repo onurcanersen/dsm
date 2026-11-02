@@ -89,8 +89,7 @@ class ModelSetupDataGraph:
                       "system_hierarchy": cls._hierarchy(hierarchy_by_unit.get(name))} for name in lib_ids]
         nodes_payload = [{"id": node_ids[name], "name": name, **cls._node_attributes(node_enrichment.get(name))}
                          for name in node_ids]
-        network_payload = [{"id": network_ids[name], "name": name, "purpose": networks_by_name[name].purpose or NOT_FOUND}
-                           for name in network_ids]
+        network_payload = [cls._network(networks_by_name[name], network_ids[name]) for name in network_ids]
         topic_payload = [cls._topic(topics_by_name[name], topic_ids[name]) for name in topic_ids]
         message_payload = [cls._message(messages_by_name[name], message_ids[name]) for name in message_ids]
 
@@ -163,6 +162,14 @@ class ModelSetupDataGraph:
             "name": message.name,
             "size": message.size if message.size is not None else -1,
             "frequency": message.frequency,
+        }
+
+    @staticmethod
+    def _network(network: Network, network_id: str) -> Dict[str, Any]:
+        return {
+            "id": network_id,
+            "name": network.name,
+            "bandwidth": network.bandwidth if network.bandwidth is not None else -1,
         }
 
     @staticmethod

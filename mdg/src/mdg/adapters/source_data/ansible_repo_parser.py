@@ -30,7 +30,7 @@ class AnsibleRepoParser(IAnsibleRepoParser):
         ]
 
     def get_networks(self) -> List[Network]:
-        return [Network("Switch-0", purpose="backbone"), Network("Switch-1", purpose="sensor")]
+        return [Network("Switch-0", bandwidth=1.0), Network("Switch-1", bandwidth=0.1)]
 
     def get_connects_to(self) -> List[ConnectsTo]:
         return [

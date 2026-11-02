@@ -18,7 +18,7 @@ RELATIONS = [
 NODE_ATTRS = [
     Node(seed.NODE_0, group="processors", hw="x86-64/8c", os="Linux 5.15", mw="DDS", gpu="none", display="none"),
 ]
-NETWORKS = [Network(seed.SWITCH_0, purpose="backbone"), Network(seed.SWITCH_1, purpose="sensor")]
+NETWORKS = [Network(seed.SWITCH_0, bandwidth=1.0), Network(seed.SWITCH_1, bandwidth=0.1)]
 CONNECTS = [
     ConnectsTo(seed.NODE_0, seed.SWITCH_0, device="eth0", dev_raw="ens1f0"),
     ConnectsTo(seed.NODE_1, seed.SWITCH_1, device="eth0", dev_raw="ens1f0"),
@@ -49,8 +49,8 @@ def test_entities_get_sorted_ids_and_inventory_versions():
         {"id": "N0", "name": seed.NODE_0, "group": "processors", "hw": "x86-64/8c", "os": "Linux 5.15", "mw": "DDS", "gpu": "none", "display": "none"},
         {"id": "N1", "name": seed.NODE_1, "group": "NOT_FOUND", "hw": "NOT_FOUND", "os": "NOT_FOUND", "mw": "NOT_FOUND", "gpu": "NOT_FOUND", "display": "NOT_FOUND"},
     ]
-    assert [(w["id"], w["name"], w["purpose"]) for w in graph["networks"]] == [
-        ("W0", seed.SWITCH_0, "backbone"), ("W1", seed.SWITCH_1, "sensor"),
+    assert [(w["id"], w["name"], w["bandwidth"]) for w in graph["networks"]] == [
+        ("W0", seed.SWITCH_0, 1.0), ("W1", seed.SWITCH_1, 0.1),
     ]
     assert [(a["id"], a["name"], a["version"]) for a in graph["applications"]] == [
         ("A0", seed.NAV_APP, seed.VERSION), ("A1", seed.SENSOR_APP, seed.VERSION),
@@ -62,6 +62,12 @@ def test_entities_get_sorted_ids_and_inventory_versions():
         ("M1", "MSG-002", seed.MSG_SENSOR_DATA, 1207, 100.0),
     ]
     assert graph["metadata"]["scale"] == {"apps": 2, "topics": 2, "messages": 2, "nodes": 2, "libraries": 1, "networks": 2}
+
+
+def test_a_network_without_a_bandwidth_is_minus_one():
+    graph = _graph(networks=[Network(seed.SWITCH_0)])
+
+    assert graph["networks"] == [{"id": "W0", "name": seed.SWITCH_0, "bandwidth": -1}]
 
 
 def test_connects_to_join_node_and_network_ids_by_name_and_drop_unresolvable():

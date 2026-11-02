@@ -22,7 +22,7 @@ class IAnsibleRepoParser(ABC):
 
     @abstractmethod
     def get_networks(self) -> List[Network]:
-        """The networks with their purpose (req 3)."""
+        """The networks with their bandwidth in Gb/s (req 3)."""
 
     @abstractmethod
     def get_connects_to(self) -> List[ConnectsTo]:

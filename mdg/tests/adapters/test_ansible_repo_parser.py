@@ -17,10 +17,10 @@ def test_nodes_enrich_the_seeded_processor_units(tmp_path):
     assert {node.name for node in parser.get_nodes()} >= {seed.NODE_0, seed.NODE_1}
 
 
-def test_networks_have_a_purpose(tmp_path):
+def test_networks_have_a_bandwidth(tmp_path):
     networks = _parser(tmp_path).get_networks()
 
-    assert networks and all(n.name and n.purpose for n in networks)
+    assert networks and all(n.name and n.bandwidth for n in networks)
 
 
 def test_connects_are_typed_and_reference_the_seeded_entities(tmp_path):

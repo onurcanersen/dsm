@@ -104,19 +104,19 @@ class Node:
 
 @dataclass(frozen=True)
 class Network:
-    """A network the ansible repo declares, with its bandwidth in Gb/s
-    (SRS DSM-MDG req 2.4, 3)."""
+    """A network the ansible repo declares (SRS DSM-MDG req 2.4, 3)."""
     name: str
-    bandwidth: Optional[float] = None
 
 
 @dataclass(frozen=True)
 class ConnectsTo:
-    """One connection between a node and a network with its device names, the
-    relation record of kind CONNECTS_TO mirroring UnitRelation's role
+    """One connection between a node and a network with its device names and
+    the bandwidth of that link in Gb/s, the relation record of kind
+    CONNECTS_TO mirroring UnitRelation's role
     (SRS DSM-MDG req 2.4, 3; DSM-SMM req 7)."""
     from_name: str
     to_name: str
     kind: RelationKind = RelationKind.CONNECTS_TO
     device: Optional[str] = None
     dev_raw: Optional[str] = None
+    bandwidth: Optional[float] = None

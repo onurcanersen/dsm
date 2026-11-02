@@ -69,13 +69,13 @@ def ansible_repo_parser_class(calls: Calls):
             ]
 
         def get_networks(self):
-            return [Network(seed.SWITCH_0, bandwidth=1.0)]
+            return [Network(seed.SWITCH_0)]
 
         def get_connects_to(self):
             return [
-                ConnectsTo(seed.NODE_0, seed.SWITCH_0, device="eth0", dev_raw="ens1f0"),
-                ConnectsTo(seed.NODE_1, seed.SWITCH_0, device="eth0", dev_raw="ens1f0"),
-                ConnectsTo(seed.NODE_0, seed.GHOST_SWITCH, device="eth1", dev_raw="ens1f1"),
+                ConnectsTo(seed.NODE_0, seed.SWITCH_0, device="eth0", dev_raw="ens1f0", bandwidth=1.0),
+                ConnectsTo(seed.NODE_1, seed.SWITCH_0, device="eth0", dev_raw="ens1f0", bandwidth=1.0),
+                ConnectsTo(seed.NODE_0, seed.GHOST_SWITCH, device="eth1", dev_raw="ens1f1", bandwidth=0.1),
             ]
 
     FakeAnsibleRepoParser.instances = []

@@ -122,8 +122,9 @@
     return value === undefined || value === null || value === "" || value === MISSING ? "—" : String(value);
   }
 
-  // A network's bandwidth, in the Gb/s the file carries it in; the writer's -1
-  // for a source that had none reads as the dash the other missing values take.
+  // A connection's bandwidth, in the Gb/s the file carries it on the link; the
+  // writer's -1 for a source that had none reads as the dash the other missing
+  // values take.
   function bandwidthText(value) {
     return typeof value !== "number" || !isFinite(value) || value <= 0 ? "—" : value + " Gb/s";
   }
@@ -351,8 +352,8 @@
     (relationships.connects_to || []).forEach(function (link) {
       // A node on a network, as the writer emits it; anything else is skipped.
       if (nodes[link.from] && networks[link.to]) {
-        (members[link.to] || (members[link.to] = [])).push({ node: link.from, device: link.device, dev_raw: link.dev_raw });
-        (homes[link.from] || (homes[link.from] = [])).push({ network: link.to, device: link.device, dev_raw: link.dev_raw });
+        (members[link.to] || (members[link.to] = [])).push({ node: link.from, device: link.device, dev_raw: link.dev_raw, bandwidth: link.bandwidth });
+        (homes[link.from] || (homes[link.from] = [])).push({ network: link.to, device: link.device, dev_raw: link.dev_raw, bandwidth: link.bandwidth });
       }
     });
     (relationships.runs_on || []).forEach(function (edge) {
@@ -755,6 +756,7 @@
             points: points,
             device: tap.link.device,
             dev_raw: tap.link.dev_raw,
+            bandwidth: tap.link.bandwidth,
             from: tap.node.name,
             to: (index.networks[tap.network] || {}).name
           }
@@ -834,7 +836,7 @@
         id: busId,
         label: String(network.name),
         text: String(network.name).toLowerCase(),
-        path: bandwidthText(network.bandwidth)
+        path: plural(count, "node")
       });
     });
 
@@ -920,8 +922,9 @@
         // be; the hardware stays in the hover card.
         return (data.console ? groupOf(attrs) || "ungrouped" : "Node") + " · " + plural(data.units || 0, "CSU");
       case "switch":
-        // The network's bandwidth and how many nodes are on it.
-        return bandwidthText(attrs.bandwidth) + " · " + plural(data.count || 0, "node");
+        // How many nodes are on the network; a bandwidth belongs to the node's
+        // line, not to the switch, so the cabinet never has one to show.
+        return (data.tag || "Switch") + " · " + plural(data.count || 0, "node");
       case "group":
         return (GROUP_SUBTITLES[data.label] || "Relation") + " · " + data.count;
       default:
@@ -1116,7 +1119,7 @@
   // the network's edge under it) and the name tag riding the line in the
   // network's hue, read top to bottom. The tag slides down by the bar's
   // stuck offset, so it stays in view as the picture scrolls
-  // (stickLabels); the node count and bandwidth stay in the hover card. The
+  // (stickLabels); the node count stays in the hover card. The
   // box modifiers become bus ones.
   function busHtml(datum, modifier) {
     var data = datum.data || {};
@@ -1565,10 +1568,12 @@
       return "";
     }
     if (data.edge) {
-      // A line of the hardware view: the port it leaves by and what it joins.
+      // A line of the hardware view: the port it leaves by, the bandwidth this
+      // link carries and what it joins.
       return tipCard(data.from + " \u2014 " + data.to, "Connects to", function (rows) {
         row(rows, "Device", data.device);
         row(rows, "Raw device", data.dev_raw);
+        row(rows, "Bandwidth", bandwidthText(data.bandwidth));
       });
     }
     return tipCard(data.label || datum.id, data.tag || KIND_NAMES[data.kind] || "", function (rows) {
@@ -1586,7 +1591,6 @@
           break;
         case "bus":
         case "switch":
-          row(rows, "Bandwidth", bandwidthText(attrs.bandwidth));
           row(rows, "Nodes", data.count);
           row(rows, "Id", attrs.id);
           break;

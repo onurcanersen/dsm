@@ -18,11 +18,11 @@ RELATIONS = [
 NODE_ATTRS = [
     Node(seed.NODE_0, group="processors", hw="x86-64/8c", os="Linux 5.15", mw="DDS", gpu="none", display="none"),
 ]
-NETWORKS = [Network(seed.SWITCH_0, bandwidth=1.0), Network(seed.SWITCH_1, bandwidth=0.1)]
+NETWORKS = [Network(seed.SWITCH_0), Network(seed.SWITCH_1)]
 CONNECTS = [
-    ConnectsTo(seed.NODE_0, seed.SWITCH_0, device="eth0", dev_raw="ens1f0"),
-    ConnectsTo(seed.NODE_1, seed.SWITCH_1, device="eth0", dev_raw="ens1f0"),
-    ConnectsTo(seed.NODE_0, seed.GHOST_SWITCH, device="eth1", dev_raw="ens1f1"),
+    ConnectsTo(seed.NODE_0, seed.SWITCH_0, device="eth0", dev_raw="ens1f0", bandwidth=1.0),
+    ConnectsTo(seed.NODE_1, seed.SWITCH_1, device="eth0", dev_raw="ens1f0", bandwidth=0.1),
+    ConnectsTo(seed.NODE_0, seed.GHOST_SWITCH, device="eth1", dev_raw="ens1f1", bandwidth=0.1),
 ]
 TOPICS = [
     Topic(seed.NAV_POSITION, 6138, "PERSISTENT", "BEST_EFFORT", "LOW"),
@@ -49,9 +49,7 @@ def test_entities_get_sorted_ids_and_inventory_versions():
         {"id": "N0", "name": seed.NODE_0, "group": "processors", "hw": "x86-64/8c", "os": "Linux 5.15", "mw": "DDS", "gpu": "none", "display": "none"},
         {"id": "N1", "name": seed.NODE_1, "group": "NOT_FOUND", "hw": "NOT_FOUND", "os": "NOT_FOUND", "mw": "NOT_FOUND", "gpu": "NOT_FOUND", "display": "NOT_FOUND"},
     ]
-    assert [(w["id"], w["name"], w["bandwidth"]) for w in graph["networks"]] == [
-        ("W0", seed.SWITCH_0, 1.0), ("W1", seed.SWITCH_1, 0.1),
-    ]
+    assert [(w["id"], w["name"]) for w in graph["networks"]] == [("W0", seed.SWITCH_0), ("W1", seed.SWITCH_1)]
     assert [(a["id"], a["name"], a["version"]) for a in graph["applications"]] == [
         ("A0", seed.NAV_APP, seed.VERSION), ("A1", seed.SENSOR_APP, seed.VERSION),
     ]
@@ -64,35 +62,47 @@ def test_entities_get_sorted_ids_and_inventory_versions():
     assert graph["metadata"]["scale"] == {"apps": 2, "topics": 2, "messages": 2, "nodes": 2, "libraries": 1, "networks": 2}
 
 
-def test_a_network_without_a_bandwidth_is_minus_one():
+def test_a_network_carries_only_its_id_and_name():
     graph = _graph(networks=[Network(seed.SWITCH_0)])
 
-    assert graph["networks"] == [{"id": "W0", "name": seed.SWITCH_0, "bandwidth": -1}]
+    assert graph["networks"] == [{"id": "W0", "name": seed.SWITCH_0}]
+
+
+def test_a_connect_without_a_bandwidth_is_minus_one():
+    graph = _graph(connects=[ConnectsTo(seed.NODE_0, seed.SWITCH_0, device="eth0", dev_raw="ens1f0")])
+
+    assert graph["relationships"]["connects_to"] == [
+        {"from": "N0", "to": "W0", "device": "eth0", "dev_raw": "ens1f0", "bandwidth": -1},
+    ]
 
 
 def test_connects_to_join_node_and_network_ids_by_name_and_drop_unresolvable():
     relationships = _graph()["relationships"]
 
     assert relationships["connects_to"] == [
-        {"from": "N0", "to": "W0", "device": "eth0", "dev_raw": "ens1f0"},
-        {"from": "N1", "to": "W1", "device": "eth0", "dev_raw": "ens1f0"},
+        {"from": "N0", "to": "W0", "device": "eth0", "dev_raw": "ens1f0", "bandwidth": 1.0},
+        {"from": "N1", "to": "W1", "device": "eth0", "dev_raw": "ens1f0", "bandwidth": 0.1},
     ]
 
 
 def test_connects_to_is_a_node_on_a_network_only():
     graph = _graph(connects=[
-        ConnectsTo(seed.SWITCH_0, seed.SWITCH_1, device="uplink", dev_raw="xe-0/0/0"),
-        ConnectsTo(seed.SWITCH_0, seed.NODE_0, device="eth0", dev_raw="ens1f0"),
-        ConnectsTo(seed.NODE_1, seed.SWITCH_0, device="eth0", dev_raw="ens1f0"),
+        ConnectsTo(seed.SWITCH_0, seed.SWITCH_1, device="uplink", dev_raw="xe-0/0/0", bandwidth=1.0),
+        ConnectsTo(seed.SWITCH_0, seed.NODE_0, device="eth0", dev_raw="ens1f0", bandwidth=1.0),
+        ConnectsTo(seed.NODE_1, seed.SWITCH_0, device="eth0", dev_raw="ens1f0", bandwidth=1.0),
     ])
 
-    assert graph["relationships"]["connects_to"] == [{"from": "N1", "to": "W0", "device": "eth0", "dev_raw": "ens1f0"}]
+    assert graph["relationships"]["connects_to"] == [
+        {"from": "N1", "to": "W0", "device": "eth0", "dev_raw": "ens1f0", "bandwidth": 1.0}
+    ]
 
 
 def test_connects_device_fields_default_to_not_found():
     graph = _graph(connects=[ConnectsTo(seed.NODE_0, seed.SWITCH_0)])
 
-    assert graph["relationships"]["connects_to"] == [{"from": "N0", "to": "W0", "device": "NOT_FOUND", "dev_raw": "NOT_FOUND"}]
+    assert graph["relationships"]["connects_to"] == [
+        {"from": "N0", "to": "W0", "device": "NOT_FOUND", "dev_raw": "NOT_FOUND", "bandwidth": -1}
+    ]
 
 
 def test_without_ansible_data_nodes_are_not_found_and_network_lists_empty():
@@ -118,10 +128,12 @@ def test_ansible_nodes_merge_with_the_system_repo_nodes():
 def test_connects_to_from_an_ansible_only_node_resolves():
     graph = _graph(
         nodes=[*NODE_ATTRS, Node("Node-2", group="processors")],
-        connects=[ConnectsTo("Node-2", seed.SWITCH_0, device="eth0", dev_raw="ens1f0")],
+        connects=[ConnectsTo("Node-2", seed.SWITCH_0, device="eth0", dev_raw="ens1f0", bandwidth=1.0)],
     )
 
-    assert graph["relationships"]["connects_to"] == [{"from": "N2", "to": "W0", "device": "eth0", "dev_raw": "ens1f0"}]
+    assert graph["relationships"]["connects_to"] == [
+        {"from": "N2", "to": "W0", "device": "eth0", "dev_raw": "ens1f0", "bandwidth": 1.0}
+    ]
 
 
 def test_ansible_nodes_without_a_name_are_ignored():

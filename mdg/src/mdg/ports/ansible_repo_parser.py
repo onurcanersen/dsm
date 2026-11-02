@@ -22,11 +22,12 @@ class IAnsibleRepoParser(ABC):
 
     @abstractmethod
     def get_networks(self) -> List[Network]:
-        """The networks with their bandwidth in Gb/s (req 3)."""
+        """The networks, by name (req 3)."""
 
     @abstractmethod
     def get_connects_to(self) -> List[ConnectsTo]:
-        """The connections between nodes and networks (req 3)."""
+        """The connections between nodes and networks with their device names
+        and the bandwidth of each link in Gb/s (req 3)."""
 
 
 AnsibleRepoParserFactory = Callable[[Path, str, str], IAnsibleRepoParser]

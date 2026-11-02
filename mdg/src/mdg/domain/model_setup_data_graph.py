@@ -67,6 +67,7 @@ class ModelSetupDataGraph:
                 connects_to.append({
                     "from": source, "to": target,
                     "device": relation.device or NOT_FOUND, "dev_raw": relation.dev_raw or NOT_FOUND,
+                    "bandwidth": relation.bandwidth if relation.bandwidth is not None else -1,
                 })
                 continue
             source = app_ids.get(relation.unit_name) or lib_ids.get(relation.unit_name)
@@ -169,7 +170,6 @@ class ModelSetupDataGraph:
         return {
             "id": network_id,
             "name": network.name,
-            "bandwidth": network.bandwidth if network.bandwidth is not None else -1,
         }
 
     @staticmethod

@@ -172,10 +172,10 @@ def test_the_ansible_repo_data_reaches_the_saved_graph(tmp_path: Path):
     nodes = {n["name"]: n for n in graph["nodes"]}
     assert nodes[seed.NODE_0]["group"] == "processors"
     assert nodes[seed.NODE_0]["hw"] == "x86-64/8c"
-    assert graph["networks"] == [{"id": "W0", "name": seed.SWITCH_0, "bandwidth": 1.0}]
+    assert graph["networks"] == [{"id": "W0", "name": seed.SWITCH_0}]
     assert graph["relationships"]["connects_to"] == [
-        {"from": "N0", "to": "W0", "device": "eth0", "dev_raw": "ens1f0"},
-        {"from": "N1", "to": "W0", "device": "eth0", "dev_raw": "ens1f0"},
+        {"from": "N0", "to": "W0", "device": "eth0", "dev_raw": "ens1f0", "bandwidth": 1.0},
+        {"from": "N1", "to": "W0", "device": "eth0", "dev_raw": "ens1f0", "bandwidth": 1.0},
     ]
     assert graph["metadata"]["scale"]["networks"] == 1
 

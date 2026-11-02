@@ -30,11 +30,11 @@ class AnsibleRepoParser(IAnsibleRepoParser):
         ]
 
     def get_networks(self) -> List[Network]:
-        return [Network("Switch-0", bandwidth=1.0), Network("Switch-1", bandwidth=0.1)]
+        return [Network("Switch-0"), Network("Switch-1")]
 
     def get_connects_to(self) -> List[ConnectsTo]:
         return [
-            ConnectsTo("Node-0", "Switch-0", device="eth0", dev_raw="ens1f0"),
-            ConnectsTo("Node-1", "Switch-0", device="eth0", dev_raw="ens1f0"),
-            ConnectsTo("Node-0", "Switch-1", device="eth1", dev_raw="ens1f1"),
+            ConnectsTo("Node-0", "Switch-0", device="eth0", dev_raw="ens1f0", bandwidth=1.0),
+            ConnectsTo("Node-1", "Switch-0", device="eth0", dev_raw="ens1f0", bandwidth=1.0),
+            ConnectsTo("Node-0", "Switch-1", device="eth1", dev_raw="ens1f1", bandwidth=0.1),
         ]

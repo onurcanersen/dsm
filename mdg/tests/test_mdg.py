@@ -70,13 +70,11 @@ def test_saved_file_holds_the_whole_model_setup_data(tmp_path: Path):
     assert graph["relationships"]["sends"] == [{"from": "A0", "to": "M0"}, {"from": "A1", "to": "M1"}]
     assert graph["relationships"]["receives"] == [{"from": "A1", "to": "M0"}, {"from": "A0", "to": "M1"}]
     assert {n["name"]: n["group"] for n in graph["nodes"]} == {seed.NODE_0: "processors", seed.NODE_1: "processors"}
-    assert [(w["id"], w["name"], w["bandwidth"]) for w in graph["networks"]] == [
-        ("W0", seed.SWITCH_0, 1.0), ("W1", seed.SWITCH_1, 0.1),
-    ]
+    assert [(w["id"], w["name"]) for w in graph["networks"]] == [("W0", seed.SWITCH_0), ("W1", seed.SWITCH_1)]
     assert graph["relationships"]["connects_to"] == [
-        {"from": "N0", "to": "W0", "device": "eth0", "dev_raw": "ens1f0"},
-        {"from": "N1", "to": "W0", "device": "eth0", "dev_raw": "ens1f0"},
-        {"from": "N0", "to": "W1", "device": "eth1", "dev_raw": "ens1f1"},
+        {"from": "N0", "to": "W0", "device": "eth0", "dev_raw": "ens1f0", "bandwidth": 1.0},
+        {"from": "N1", "to": "W0", "device": "eth0", "dev_raw": "ens1f0", "bandwidth": 1.0},
+        {"from": "N0", "to": "W1", "device": "eth1", "dev_raw": "ens1f1", "bandwidth": 0.1},
     ]
 
 

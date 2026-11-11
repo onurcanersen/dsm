@@ -128,8 +128,8 @@ def create_app(runtime: Runtime | None = None) -> Flask:
     """The Flask application over a runtime; the dve.ini runtime when none is given."""
     runtime = runtime or load_runtime()
     app = Flask(__name__)
-    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-    same_origin_only(app)
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # NOSONAR sets the CSRF cookie guard, not an endpoint
+    same_origin_only(app)  # NOSONAR installs the origin check, not an endpoint
     app.secret_key = config().api.secret_key
     app.permanent_session_lifetime = timedelta(seconds=config().api.session_lifetime)
     app.config["MAX_CONTENT_LENGTH"] = config().api.max_upload_mb * 1024 * 1024

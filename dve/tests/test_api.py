@@ -18,7 +18,7 @@ from dve.domain.task_status import TaskStatus
 from dve.services.task_service import run_production
 
 UNITS_URL = f"/api/projects/{seed.PROJECT}/platforms/{seed.PLATFORM}/versions/{seed.VERSION}/units"
-FOREIGN_ORIGIN = "http://evil.example"
+FOREIGN_ORIGIN = "http://evil.example"  # NOSONAR dummy origin, asserts the 403
 
 
 # ------------------------------------------------------------------ session

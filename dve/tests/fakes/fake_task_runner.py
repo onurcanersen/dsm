@@ -56,9 +56,15 @@ def scripted_task(task_id: str, mode: str, progress) -> dict:
     import without pytest, scripted by its `mode` argument.
 
     succeed: logs a line and returns; fail: raises; crash: exits without
-    reporting; sleep: reports progress and waits to be terminated."""
+    reporting; sleep: reports progress and waits to be terminated; noise: logs one
+    line under DSM's own tree and one under another library's, to show which of
+    them the task collects."""
     if mode == "succeed":
-        logging.getLogger("fakes.child").info("hello from child")
+        logging.getLogger("dve.fakes.child").info("hello from child")
+        return {"task_id": task_id}
+    if mode == "noise":
+        logging.getLogger("dve.fakes.child").info("ours")
+        logging.getLogger("someclient.pool").info("theirs")
         return {"task_id": task_id}
     if mode == "fail":
         raise ValueError("boom")

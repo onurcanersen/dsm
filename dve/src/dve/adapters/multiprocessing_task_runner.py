@@ -20,6 +20,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any, Callable, Deque, Dict, Optional, Protocol, Tuple
 
+from dve.config import APP_LOGGERS, configure_logging
 from dve.domain.task_status import FAILURE, PENDING, REVOKED, STARTED, SUCCESS, TaskStatus
 from dve.ports.task_log import ITaskLog
 from dve.ports.task_runner import ITaskRunner
@@ -46,26 +47,41 @@ class TaskEvents(Protocol):
     def close(self) -> None: ...
 
 
-class TaskLogHandler(logging.Handler):
-    """Forwards the task's log records (INFO and above) as ("log", line)
-    events; a send failure is logged, never raised (req 8)."""
+class PipeWriter:
+    """The task's log lines as a write-only file over its event channel: each line
+    becomes a ("log", line) event; a send failure is logged, never raised (req 8),
+    and the guard keeps that very warning from re-entering the writer."""
 
     def __init__(self, events: TaskEvents):
-        super().__init__(level=logging.INFO)
-        self.setFormatter(logging.Formatter("%(asctime)s %(levelname)-8s %(message)s", datefmt="%H:%M:%S"))
         self._events = events
-        self._emitting = False
+        self._writing = False
 
-    def emit(self, record: logging.LogRecord) -> None:
-        if self._emitting:
-            return
-        self._emitting = True
+    def write(self, line: str) -> int:
+        if self._writing:
+            return len(line)
+        self._writing = True
         try:
-            self._events.send(("log", self.format(record)))
+            self._events.send(("log", line.rstrip("\n")))
         except Exception:
             logger.warning("task log: failed to send a line")
         finally:
-            self._emitting = False
+            self._writing = False
+        return len(line)
+
+    def flush(self) -> None:
+        """A line is sent as it is written, so nothing is buffered here."""
+        return None
+
+
+def task_log_handler(events: TaskEvents) -> logging.StreamHandler:
+    """The handler that forwards the task's log records (INFO and above) to its
+    events; attached to the `APP_LOGGERS` trees, so no other library's records
+    reach the task's log."""
+    handler = logging.StreamHandler(PipeWriter(events))
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)-8s %(message)s", datefmt="%H:%M:%S"))
+    handler.terminator = ""
+    return handler
 
 
 class TaskProgress:
@@ -86,10 +102,10 @@ def _on_terminate(signum, frame) -> None:
     raise Cancelled()
 
 
-def _configure_child() -> None:
-    """The child's logging and signals: INFO to the terminal, Ctrl+C left to the
-    parent, SIGTERM (the parent's cancel) unwinds the task."""
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+def _configure_child(task_id: Optional[str] = None) -> None:
+    """The child's logging and signals: the task's level to the terminal under its
+    own id, Ctrl+C left to the parent, SIGTERM (the parent's cancel) unwinds the task."""
+    configure_logging(task_id=task_id)
     signal.signal(signal.SIGINT, signal.SIG_IGN)
     signal.signal(signal.SIGTERM, _on_terminate)
 
@@ -106,9 +122,11 @@ def run_task(target: Callable[..., Any], task_id: str, args: tuple, events: Task
     """The child entry: runs `target(task_id, *args, progress=...)` with its log
     forwarded, then sends ("done", result) or ("failed", message) and closes
     the events; a cancelled task sends nothing."""
-    _configure_child()
-    handler = TaskLogHandler(events)
-    logging.getLogger().addHandler(handler)
+    _configure_child(task_id)
+    handler = task_log_handler(events)
+    task_loggers = [logging.getLogger(name) for name in APP_LOGGERS]
+    for task_logger in task_loggers:
+        task_logger.addHandler(handler)
     try:
         result = target(task_id, *args, progress=TaskProgress(events).report)
         _send(events, ("done", result))
@@ -117,7 +135,8 @@ def run_task(target: Callable[..., Any], task_id: str, args: tuple, events: Task
     except Exception as exc:
         _send(events, ("failed", str(exc) or repr(exc)))
     finally:
-        logging.getLogger().removeHandler(handler)
+        for task_logger in task_loggers:
+            task_logger.removeHandler(handler)
         events.close()
 
 

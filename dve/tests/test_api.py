@@ -18,6 +18,7 @@ from dve.domain.task_status import TaskStatus
 from dve.services.task_service import run_production
 
 UNITS_URL = f"/api/projects/{seed.PROJECT}/platforms/{seed.PLATFORM}/versions/{seed.VERSION}/units"
+FOREIGN_ORIGIN = "http://evil.example"
 
 
 # ------------------------------------------------------------------ session
@@ -41,7 +42,7 @@ def test_login_returns_the_user_and_the_data_source_defaults(client):
 
 
 def test_login_refuses_bad_credentials_and_bad_bodies(client):
-    assert client.post("/api/login", json={"username": seed.ADMIN, "password": "wrong"}).status_code == 401
+    assert client.post("/api/login", json={"username": seed.ADMIN, "password": "wrong"}).status_code == 401  # NOSONAR dummy credential, asserts the 401
     assert client.post("/api/login", json={"username": seed.ADMIN}).get_json() == {"error": "missing field(s): password"}
     assert client.post("/api/login", data=b"x", content_type="application/json").status_code == 400
 
@@ -51,6 +52,7 @@ def test_session_cookie_is_persistent(client, login):
 
     cookie = response.headers["Set-Cookie"]
     assert "Expires=" in cookie or "Max-Age=" in cookie
+    assert "SameSite=Lax" in cookie
 
 
 def test_session_reports_unauthenticated_then_the_full_state(client, login, connect_all):
@@ -76,18 +78,57 @@ def test_logout_ends_the_session_and_its_connections(signed_in_client, login):
     assert signed_in_client.get("/api/projects").get_json() == {"error": "config management database connection required"}
 
 
-def test_session_survives_a_browser_restart(make_runtime, login, connect_all):
+def test_session_survives_a_browser_restart(make_runtime, make_client_for, login, connect_all):
     app = create_app(make_runtime())
-    client = app.test_client()
+    client = make_client_for(app)
     login(client)
     connect_all(client)
 
-    reopened = app.test_client()
+    reopened = make_client_for(app)
     reopened.set_cookie("session", client.get_cookie("session").value)
 
     body = reopened.get("/api/session").get_json()
     assert body["authenticated"] is True
     assert (body["config_mgmt_db_connected"], body["source_code_repo_connected"]) == (True, True)
+
+
+# ------------------------------------------------------------ same-origin guard
+
+
+def test_another_site_may_not_connect_a_data_source(client, login, connect_config_mgmt_db):
+    login(client)
+
+    response = client.post(
+        "/api/data-sources/connect/config-mgmt-db",
+        json={"connection_address": seed.CONFIG_DB_ADDRESS, "username": seed.USER, "password": seed.PASSWORD},
+        headers={"Origin": FOREIGN_ORIGIN},
+    )
+
+    assert response.status_code == 403
+    assert response.get_json() == {"error": "cross-origin request refused"}
+    assert client.get("/api/session").get_json()["config_mgmt_db_connected"] is False
+
+    assert connect_config_mgmt_db(client).status_code == 200
+
+
+def test_another_site_may_not_start_a_production(signed_in_client):
+    response = signed_in_client.post("/api/mdg/run", json=seed.SELECTION, headers={"Origin": FOREIGN_ORIGIN})
+
+    assert response.status_code == 403
+    assert response.get_json() == {"error": "cross-origin request refused"}
+
+
+def test_a_request_that_names_no_origin_at_all_is_refused(signed_in_client):
+    response = signed_in_client.post("/api/mdg/run", json=seed.SELECTION, headers={"Content-Type": "application/json"})
+
+    assert response.status_code == 403
+    assert response.get_json() == {"error": "cross-origin request refused"}
+
+
+def test_the_pages_own_referer_stands_in_for_a_missing_origin(signed_in_client):
+    response = signed_in_client.post("/api/mdg/run", json=seed.SELECTION, headers={"Referer": "http://localhost/"})
+
+    assert response.status_code == 202
 
 
 # ------------------------------------------------------------- data sources
@@ -109,7 +150,7 @@ def test_refused_config_mgmt_db_credentials_map_to_502(make_runtime, make_client
     client = make_client(make_runtime(config_repo=FakeConfigManagementRepository(error=ConfigManagementAccessError("bad creds"))))
     login(client)
 
-    response = connect_config_mgmt_db(client, password="wrong")
+    response = connect_config_mgmt_db(client, password="wrong")  # NOSONAR dummy wrong credential, asserts the 502
 
     assert response.status_code == 502
     assert "bad creds" in response.get_json()["error"]
@@ -120,7 +161,7 @@ def test_refused_source_repo_credentials_map_to_502(make_runtime, make_client, l
     client = make_client(make_runtime(source_repo=FakeSourceCodeRepository(error=SourceRepoAuthError("Authentication failed, could not reach 'system_repo'"))))
     login(client)
 
-    response = connect_source_repo(client, password="wrong")
+    response = connect_source_repo(client, password="wrong")  # NOSONAR dummy wrong credential, asserts the 502
 
     assert response.status_code == 502
     assert "Authentication failed" in response.get_json()["error"]
@@ -145,7 +186,7 @@ def test_connect_validates_the_body(client, login, connect_config_mgmt_db):
 
 @pytest.mark.parametrize("path", ["/api/data-sources/connect/config-mgmt-db", "/api/data-sources/connect/source-code-repo"])
 def test_connect_requires_login(client, path):
-    response = client.post(path, json={"connection_address": "a", "username": "u", "password": "p"})
+    response = client.post(path, json={"connection_address": "a", "username": "u", "password": "p"})  # NOSONAR dummy body, asserts the 401
 
     assert response.status_code == 401
 

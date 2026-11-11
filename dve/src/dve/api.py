@@ -32,6 +32,7 @@ import logging
 import time
 import uuid
 from datetime import timedelta
+from urllib.parse import urlparse
 
 from flask import Flask, jsonify, render_template, request, send_file, session
 
@@ -44,7 +45,7 @@ from mdg import (
 )
 
 from dve import Runtime, runtime as load_runtime
-from dve.config import config
+from dve.config import config, configure_logging
 from dve.domain.selection import Selection
 
 logger = logging.getLogger(__name__)
@@ -52,6 +53,7 @@ logger = logging.getLogger(__name__)
 _CREDENTIALS = ("username", "password")
 _CONNECT_FIELDS = ("connection_address", "username", "password")
 _CANDIDATE_FIELDS = ("unit_name", "version")
+_SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
 _CONNECT_SOURCES = {
     "config-mgmt-db": SourceType.CONFIG_MGMT_DB,
     "source-code-repo": SourceType.SOURCE_CODE_REPO,
@@ -106,10 +108,28 @@ def login_required(view):
     return wrapped
 
 
+def same_origin_only(app: Flask) -> None:
+    """Answers 403 to a state-changing request that cannot show it came from this app's own
+    page: the session is a cookie, so without this any site could drive the connect, run,
+    upload and cancel routes as the signed-in user (req 3)."""
+    @app.before_request
+    def from_this_page_only():
+        if request.method in _SAFE_METHODS:
+            return None
+        # Only the host and port are compared, so a TLS-terminating proxy in front of the
+        # app does not refuse its own pages over the scheme alone.
+        origin = request.headers.get("Origin") or request.headers.get("Referer")
+        if origin is None or urlparse(origin).netloc != urlparse(request.host_url).netloc:
+            return _error("cross-origin request refused", 403)
+        return None
+
+
 def create_app(runtime: Runtime | None = None) -> Flask:
     """The Flask application over a runtime; the dve.ini runtime when none is given."""
     runtime = runtime or load_runtime()
     app = Flask(__name__)
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    same_origin_only(app)
     app.secret_key = config().api.secret_key
     app.permanent_session_lifetime = timedelta(seconds=config().api.session_lifetime)
     app.config["MAX_CONTENT_LENGTH"] = config().api.max_upload_mb * 1024 * 1024
@@ -298,7 +318,7 @@ def create_app(runtime: Runtime | None = None) -> Flask:
         path, error = produced_file(project_id, platform_id, version_id, run_id)
         if error is not None:
             return error
-        return send_file(path, mimetype="application/json", as_attachment=True, download_name=path.name)
+        return send_file(path, mimetype="application/json", as_attachment=True)
 
     @app.route("/api/mdg/run", methods=["POST"])
     @login_required
@@ -356,9 +376,9 @@ def create_app(runtime: Runtime | None = None) -> Flask:
 def serve(runtime: Runtime) -> None:
     """Serves the runtime on the [api] address until interrupted; the runs in
     flight end with the process, since they are its daemon children."""
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+    configure_logging()
     api = config().api
-    print(f"DVE API on http://{api.host}:{api.port}", flush=True)
+    logger.info("DVE API on http://%s:%s", api.host, api.port)
     create_app(runtime).run(host=api.host, port=api.port)
 
 

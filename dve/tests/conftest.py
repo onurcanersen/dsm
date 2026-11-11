@@ -8,6 +8,7 @@ from pathlib import Path
 
 import mdg
 import pytest
+from flask.testing import FlaskClient
 
 from fakes import seed
 from fakes.fake_config_management_repository import FakeConfigManagementRepository
@@ -19,6 +20,20 @@ from dve.adapters.ldap_directory_service import LdapDirectoryService
 from dve.api import create_app
 from dve.services.data_source_service import DataSourceService
 from dve.services.task_service import TaskService
+
+
+ORIGIN = "http://localhost"
+
+
+class SameOriginClient(FlaskClient):
+    """A client that carries the same-origin Origin header an unsafe request gets from the
+    UI's browser, so the API's same-origin guard is not in the tests' way. A test that passes
+    its own headers is left alone, which is how it sends a foreign Origin."""
+
+    def open(self, *args, **kwargs):
+        if kwargs.get("method") not in ("GET", "HEAD", "OPTIONS") and "headers" not in kwargs:
+            kwargs["headers"] = {"Origin": ORIGIN}
+        return super().open(*args, **kwargs)
 
 
 @pytest.fixture
@@ -40,9 +55,18 @@ def make_runtime():
 
 
 @pytest.fixture
-def make_client(make_runtime):
+def make_client_for():
+    """Factory of a client over an application the test built itself."""
+    def factory(app):
+        app.test_client_class = SameOriginClient
+        return app.test_client()
+    return factory
+
+
+@pytest.fixture
+def make_client(make_runtime, make_client_for):
     """Factory of a test client over a runtime, the default one when none is given."""
-    return lambda runtime=None: create_app(runtime or make_runtime()).test_client()
+    return lambda runtime=None: make_client_for(create_app(runtime or make_runtime()))
 
 
 @pytest.fixture

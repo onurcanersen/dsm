@@ -59,6 +59,17 @@ def test_a_task_carries_its_result_and_its_log_lines_on_success(runner, log):
     assert re.fullmatch(r"\d{2}:\d{2}:\d{2} INFO     hello from child", lines[0])
 
 
+def test_a_task_collects_dsm_logs_and_not_another_librarys(runner, log):
+    task_id = runner.submit(scripted_task, "noise")
+
+    assert wait_until(finished(runner, task_id)).state == "SUCCESS"
+    lines = wait_until(lambda: log.lines_since(task_id, 0))
+
+    assert len(lines) == 1
+    assert "ours" in lines[0]
+    assert not any("theirs" in line for line in lines)
+
+
 def test_a_failing_task_carries_the_childs_message(runner):
     task_id = runner.submit(scripted_task, "fail")
 
@@ -146,7 +157,17 @@ class RecordingSink:
 
 @pytest.fixture
 def quiet_child(monkeypatch):
-    monkeypatch.setattr(task_runner, "_configure_child", lambda: None)
+    monkeypatch.setattr(task_runner, "_configure_child", lambda task_id=None: None)
+
+
+def task_log_handlers():
+    """The handlers attached to DSM's own logger trees, which is where a task's log comes from."""
+    return [
+        handler
+        for name in task_runner.APP_LOGGERS
+        for handler in logging.getLogger(name).handlers
+        if isinstance(getattr(handler, "stream", None), task_runner.PipeWriter)
+    ]
 
 
 def test_run_task_calls_the_target_with_the_id_and_progress_then_sends_done_and_closes(quiet_child):
@@ -158,7 +179,7 @@ def test_run_task_calls_the_target_with_the_id_and_progress_then_sends_done_and_
     target.assert_called_once_with("t-1", "a", 2, progress=mock.ANY)
     assert sink.events == [("done", {"ok": True})]
     assert sink.closed is True
-    assert not any(isinstance(h, task_runner.TaskLogHandler) for h in logging.getLogger().handlers)
+    assert task_log_handlers() == []
 
 
 def test_run_task_sends_failed_with_the_message_or_the_repr(quiet_child):
@@ -216,9 +237,9 @@ def test_a_dead_events_channel_does_not_fail_the_task(quiet_child, caplog):
 def test_the_child_ignores_ctrl_c_and_unwinds_on_sigterm(monkeypatch):
     calls = {}
     monkeypatch.setattr(task_runner.signal, "signal", lambda signum, handler: calls.__setitem__(signum, handler))
-    monkeypatch.setattr(task_runner.logging, "basicConfig", lambda **kwargs: None)
+    monkeypatch.setattr(task_runner, "configure_logging", lambda **kwargs: None)
 
-    task_runner._configure_child()
+    task_runner._configure_child("t-1")
 
     assert calls[signal.SIGINT] is signal.SIG_IGN
     with pytest.raises(task_runner.Cancelled):

@@ -628,12 +628,6 @@ html::-webkit-scrollbar-corner,
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .card--in {
-    animation-duration: 1ms;
-  }
-}
-
 .card[data-view="boot"],
 .card[data-view="login"] {
   width: var(--w-signin);

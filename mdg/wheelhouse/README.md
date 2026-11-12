@@ -1,7 +1,7 @@
 # mdg wheelhouse
 
 Wheels of `mdg`'s dependencies (PyMySQL[rsa] + cryptography, cffi,
-pycparser) for offline install. Needs CPython 3.9, x86_64, glibc >= 2.17
+pycparser, PyYAML) for offline install. Needs CPython 3.9, x86_64, glibc >= 2.17
 (CentOS 7+).
 
 Install from the repository root:
@@ -17,5 +17,5 @@ Regenerate where PyPI is reachable:
 python3 -m pip download --dest mdg/wheelhouse --only-binary=:all: \
   --python-version 3.9 --implementation cp \
   --platform manylinux2014_x86_64 --platform manylinux_2_28_x86_64 \
-  --abi cp39 --abi abi3 "PyMySQL[rsa]==1.0.3"
+  --abi cp39 --abi abi3 "PyMySQL[rsa]==1.0.3" "PyYAML==6.0"
 ```

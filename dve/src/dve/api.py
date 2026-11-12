@@ -7,6 +7,7 @@ Endpoints:
   POST   /api/login                                    {"username", "password"}
   POST   /api/logout
   GET    /api/session
+  GET    /api/csrf-token
   POST   /api/data-sources/connect/config-mgmt-db      {"connection_address", "username", "password"}   [login]
   POST   /api/data-sources/connect/source-code-repo    {"connection_address", "username", "password"}   [login]
   GET    /api/projects                                                                                  [login + config_mgmt_db]
@@ -22,6 +23,9 @@ Endpoints:
   GET    /api/mdg/tasks/<task_id>?after=<line>                                                           [login]
   POST   /api/mdg/tasks/<task_id>/cancel                                                                 [login]
 
+A state-changing request is answered only when it carries the session's CSRF token in
+X-CSRFToken (req 3).
+
 Run with: python -m dve.api, or dsm.
 """
 
@@ -32,9 +36,10 @@ import logging
 import time
 import uuid
 from datetime import timedelta
-from urllib.parse import urlparse
 
 from flask import Flask, jsonify, render_template, request, send_file, session
+from flask_wtf import CSRFProtect
+from flask_wtf.csrf import CSRFError, generate_csrf
 
 from mdg import (
     ConfigManagementAccessError,
@@ -53,7 +58,6 @@ logger = logging.getLogger(__name__)
 _CREDENTIALS = ("username", "password")
 _CONNECT_FIELDS = ("connection_address", "username", "password")
 _CANDIDATE_FIELDS = ("unit_name", "version")
-_SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
 _CONNECT_SOURCES = {
     "config-mgmt-db": SourceType.CONFIG_MGMT_DB,
     "source-code-repo": SourceType.SOURCE_CODE_REPO,
@@ -62,6 +66,12 @@ _CONNECT_SOURCES = {
 
 def _error(message: str, code: int):
     return jsonify({"error": message}), code
+
+
+def _csrf_rejected(reason: str):
+    """The 403 answer to a state-changing request without a usable CSRF token; the `csrf`
+    flag is what tells the UI to read a new token and send the request again."""
+    return jsonify({"error": reason, "csrf": True}), 403
 
 
 def _json_body(*required: str):
@@ -108,35 +118,24 @@ def login_required(view):
     return wrapped
 
 
-def same_origin_only(app: Flask) -> None:
-    """Answers 403 to a state-changing request that cannot show it came from this app's own
-    page: the session is a cookie, so without this any site could drive the connect, run,
-    upload and cancel routes as the signed-in user (req 3)."""
-    @app.before_request
-    def from_this_page_only():
-        if request.method in _SAFE_METHODS:
-            return None
-        # Only the host and port are compared, so a TLS-terminating proxy in front of the
-        # app does not refuse its own pages over the scheme alone.
-        origin = request.headers.get("Origin") or request.headers.get("Referer")
-        if origin is None or urlparse(origin).netloc != urlparse(request.host_url).netloc:
-            return _error("cross-origin request refused", 403)
-        return None
-
-
 def create_app(runtime: Runtime | None = None) -> Flask:
     """The Flask application over a runtime; the dve.ini runtime when none is given."""
     runtime = runtime or load_runtime()
     app = Flask(__name__)
-    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # NOSONAR sets the CSRF cookie guard, not an endpoint
-    same_origin_only(app)  # NOSONAR installs the origin check, not an endpoint
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # the cookie layer of the CSRF defense (req 3)
     app.secret_key = config().api.secret_key
     app.permanent_session_lifetime = timedelta(seconds=config().api.session_lifetime)
     app.config["MAX_CONTENT_LENGTH"] = config().api.max_upload_mb * 1024 * 1024
+    CSRFProtect(app)  # every state-changing request carries the token of GET /api/csrf-token
 
     @app.errorhandler(413)
     def too_large(_error_):
         return _error(f"file is larger than {config().api.max_upload_mb} MB", 413)
+
+    @app.errorhandler(CSRFError)
+    def refused_csrf_token(error):
+        """A state-changing request whose token is missing, stale or forged (req 3)."""
+        return _csrf_rejected(error.description)
 
     def sources():
         return runtime.data_sources.connected(session.get("conn_token"))
@@ -212,6 +211,12 @@ def create_app(runtime: Runtime | None = None) -> Flask:
             "config_mgmt_db_connected": SourceType.CONFIG_MGMT_DB in connected_sources,
             "source_code_repo_connected": SourceType.SOURCE_CODE_REPO in connected_sources,
         })
+
+    @app.route("/api/csrf-token")
+    def api_csrf_token():
+        """The token this session's state-changing requests must carry in X-CSRFToken (req 3).
+        Open before sign-in, because the sign-in itself is one of those requests."""
+        return jsonify({"csrf_token": generate_csrf()})
 
     @app.route("/api/data-sources/connect/<source>", methods=["POST"])
     @login_required

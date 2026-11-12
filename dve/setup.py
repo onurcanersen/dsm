@@ -9,6 +9,7 @@ setup(
     packages=find_packages(where="src"),
     install_requires=[
         "Flask==2.3.2",
+        "Flask-WTF==1.2.2",
         "mdg",
     ],
     entry_points={"console_scripts": ["dsm=dve.__main__:main"]},

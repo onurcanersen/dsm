@@ -24,6 +24,9 @@ python3 -m venv venv && source venv/bin/activate
 pip install -e ./mdg -e ./dve
 ```
 
+Without PyPI access, install from the vendored wheels instead:
+`mdg/wheelhouse/README.md`, `dve/wheelhouse/README.md`.
+
 **3. API** (Ctrl+C stops it and its runs):
 
 ```bash

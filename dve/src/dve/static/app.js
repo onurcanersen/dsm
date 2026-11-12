@@ -6,6 +6,7 @@
 
   var API = {
     session: "/api/session",
+    csrfToken: "/api/csrf-token",
     login: "/api/login",
     logout: "/api/logout",
     projects: "/api/projects",
@@ -135,13 +136,11 @@
 
   /* ---------------------------------------------------------------- http */
 
-  function request(method, url, body) {
-    var options = { method: method, credentials: "same-origin" };
-    if (body !== undefined) {
-      options.headers = { "Content-Type": "application/json" };
-      // A file goes as it is; anything else as JSON.
-      options.body = body instanceof Blob ? body : JSON.stringify(body);
-    }
+  // The session's CSRF token, which every state-changing request must carry in X-CSRFToken;
+  // read once and kept until the server refuses it or the session ends.
+  var csrfToken = null;
+
+  function send(url, options) {
     return fetch(url, options).then(function (response) {
       if (response.status === 204) {
         return null;
@@ -155,10 +154,48 @@
           if (!response.ok) {
             var error = new Error(payload.error || "Request failed (" + response.status + ").");
             error.status = response.status;
+            error.csrf = payload.csrf === true;
             throw error;
           }
           return payload;
         });
+    });
+  }
+
+  // The sign-in form needs a token too, so an anonymous session is served one as well.
+  function csrf() {
+    if (csrfToken) {
+      return Promise.resolve(csrfToken);
+    }
+    return send(API.csrfToken, { method: "GET", credentials: "same-origin" }).then(function (payload) {
+      csrfToken = payload.csrf_token;
+      return csrfToken;
+    });
+  }
+
+  function request(method, url, body) {
+    var options = { method: method, credentials: "same-origin", headers: {} };
+    if (body !== undefined) {
+      options.headers["Content-Type"] = "application/json";
+      // A file goes as it is; anything else as JSON.
+      options.body = body instanceof Blob ? body : JSON.stringify(body);
+    }
+    if (method === "GET" || method === "HEAD") {
+      return send(url, options);
+    }
+    // A refused token, an hour-old one most often, is met with a fresh read and one retry.
+    return csrf().then(function (token) {
+      options.headers["X-CSRFToken"] = token;
+      return send(url, options).catch(function (error) {
+        if (!error.csrf) {
+          throw error;
+        }
+        csrfToken = null;
+        return csrf().then(function (fresh) {
+          options.headers["X-CSRFToken"] = fresh;
+          return send(url, options);
+        });
+      });
     });
   }
 
@@ -377,6 +414,7 @@
   }
 
   function resetState() {
+    csrfToken = null;
     state.username = null;
     SOURCES.forEach(function (source) {
       state.sources[source.key] = false;

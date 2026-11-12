@@ -22,18 +22,41 @@ from dve.services.data_source_service import DataSourceService
 from dve.services.task_service import TaskService
 
 
-ORIGIN = "http://localhost"
+def _refused_token(response) -> bool:
+    """Whether this 403 is the API's "send a fresh CSRF token" answer."""
+    payload = response.get_json(silent=True)
+    return isinstance(payload, dict) and payload.get("csrf") is True
 
 
-class SameOriginClient(FlaskClient):
-    """A client that carries the same-origin Origin header an unsafe request gets from the
-    UI's browser, so the API's same-origin guard is not in the tests' way. A test that passes
-    its own headers is left alone, which is how it sends a foreign Origin."""
+class CsrfClient(FlaskClient):
+    """A client that carries the X-CSRFToken an unsafe request gets from the UI's browser:
+    read once from GET /api/csrf-token and sent on every state-changing request. Like the UI
+    it answers a refused token with one fresh read and a retry, which is how a test signs out
+    and back in on one client. A test that sends its own X-CSRFToken is left alone, which is
+    how it sends a forged one."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._token = None
 
     def open(self, *args, **kwargs):
-        if kwargs.get("method") not in ("GET", "HEAD", "OPTIONS") and "headers" not in kwargs:
-            kwargs["headers"] = {"Origin": ORIGIN}
-        return super().open(*args, **kwargs)
+        if kwargs.get("method") in (None, "GET", "HEAD", "OPTIONS"):
+            return super().open(*args, **kwargs)
+        headers = dict(kwargs.pop("headers", None) or {})
+        if any(name.lower() == "x-csrftoken" for name in headers):
+            return super().open(*args, headers=headers, **kwargs)
+        for _attempt in (1, 2):
+            headers["X-CSRFToken"] = self.token()
+            response = super().open(*args, headers=headers, **kwargs)
+            if response.status_code != 403 or not _refused_token(response):
+                return response
+            self._token = None
+        return response
+
+    def token(self) -> str:
+        if self._token is None:
+            self._token = self.get("/api/csrf-token").get_json()["csrf_token"]
+        return self._token
 
 
 @pytest.fixture
@@ -58,7 +81,7 @@ def make_runtime():
 def make_client_for():
     """Factory of a client over an application the test built itself."""
     def factory(app):
-        app.test_client_class = SameOriginClient
+        app.test_client_class = CsrfClient
         return app.test_client()
     return factory
 

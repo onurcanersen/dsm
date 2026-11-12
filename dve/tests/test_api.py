@@ -18,7 +18,6 @@ from dve.domain.task_status import TaskStatus
 from dve.services.task_service import run_production
 
 UNITS_URL = f"/api/projects/{seed.PROJECT}/platforms/{seed.PLATFORM}/versions/{seed.VERSION}/units"
-FOREIGN_ORIGIN = "http://evil.example"  # NOSONAR dummy origin, asserts the 403
 
 
 # ------------------------------------------------------------------ session
@@ -92,41 +91,35 @@ def test_session_survives_a_browser_restart(make_runtime, make_client_for, login
     assert (body["config_mgmt_db_connected"], body["source_code_repo_connected"]) == (True, True)
 
 
-# ------------------------------------------------------------ same-origin guard
+# ------------------------------------------------------------------ csrf token
 
 
-def test_another_site_may_not_connect_a_data_source(client, login, connect_config_mgmt_db):
-    login(client)
+def test_the_csrf_token_is_open_before_sign_in(client):
+    response = client.get("/api/csrf-token")
 
-    response = client.post(
-        "/api/data-sources/connect/config-mgmt-db",
-        json={"connection_address": seed.CONFIG_DB_ADDRESS, "username": seed.USER, "password": seed.PASSWORD},
-        headers={"Origin": FOREIGN_ORIGIN},
-    )
-
-    assert response.status_code == 403
-    assert response.get_json() == {"error": "cross-origin request refused"}
-    assert client.get("/api/session").get_json()["config_mgmt_db_connected"] is False
-
-    assert connect_config_mgmt_db(client).status_code == 200
+    assert response.status_code == 200
+    assert response.get_json()["csrf_token"]
 
 
-def test_another_site_may_not_start_a_production(signed_in_client):
-    response = signed_in_client.post("/api/mdg/run", json=seed.SELECTION, headers={"Origin": FOREIGN_ORIGIN})
+def test_an_unsafe_request_without_a_token_is_refused(make_runtime):
+    client = create_app(make_runtime()).test_client()
+
+    response = client.post("/api/mdg/run", json=seed.SELECTION)
 
     assert response.status_code == 403
-    assert response.get_json() == {"error": "cross-origin request refused"}
+    assert response.get_json() == {"error": "The CSRF token is missing.", "csrf": True}
 
 
-def test_a_request_that_names_no_origin_at_all_is_refused(signed_in_client):
-    response = signed_in_client.post("/api/mdg/run", json=seed.SELECTION, headers={"Content-Type": "application/json"})
+def test_a_forged_csrf_token_is_refused(signed_in_client):
+    response = signed_in_client.post("/api/logout", headers={"X-CSRFToken": "forged"})  # NOSONAR dummy token, asserts the 403
 
     assert response.status_code == 403
-    assert response.get_json() == {"error": "cross-origin request refused"}
+    assert response.get_json() == {"error": "The CSRF token is invalid.", "csrf": True}
+    assert signed_in_client.get("/api/session").get_json()["authenticated"] is True
 
 
-def test_the_pages_own_referer_stands_in_for_a_missing_origin(signed_in_client):
-    response = signed_in_client.post("/api/mdg/run", json=seed.SELECTION, headers={"Referer": "http://localhost/"})
+def test_a_token_carrying_request_is_answered_whatever_its_origin(signed_in_client):
+    response = signed_in_client.post("/api/mdg/run", json=seed.SELECTION, headers={"Origin": "http://evil.example"})  # NOSONAR dummy origin, asserts the 202
 
     assert response.status_code == 202
 

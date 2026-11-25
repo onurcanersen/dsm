@@ -29,6 +29,7 @@ PRODUCER = "operator"
 RUN_1 = "run-1"
 RUN_2 = "run-2"
 SOURCE_REPO_URL = "http://localhost:3000/dsm-src"
+FALLBACK_SOURCE_REPO_URL = "http://backup:3000/dsm-mirror"
 CONFIG_DB_ADDRESS = "localhost:3306/cmdb"
 CREDENTIALS = "dsm:dsm"
 

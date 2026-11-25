@@ -26,9 +26,26 @@ def test_shipped_dve_ini_is_loaded():
     assert sources[SourceType.CONFIG_MGMT_DB].connection_address == seed.CONFIG_DB_ADDRESS
     assert sources[SourceType.CONFIG_MGMT_DB].access_method == "mysql"
     assert sources[SourceType.SOURCE_CODE_REPO].connection_address == seed.SOURCE_REPO_URL
+    assert sources[SourceType.SOURCE_CODE_REPO].fallback_connection_address == seed.FALLBACK_SOURCE_REPO_URL
+    assert sources[SourceType.CONFIG_MGMT_DB].fallback_connection_address == ""
     assert sources[SourceType.SOURCE_CODE_REPO].user_info == ""
     assert (config.api.host, config.api.port, config.api.session_lifetime) == ("127.0.0.1", 8080, 86400)
     assert config.api.log_level == "INFO"
+
+
+def test_the_second_address_of_a_data_source_is_optional(tmp_path):
+    ini = tmp_path / "dve.ini"
+    ini.write_text("[source_code_repo]\nconnection_address = http://primary:3000/dsm-src\n", encoding="utf-8")
+
+    assert load(ini).data_sources[0].fallback_connection_address == ""
+
+    ini.write_text(
+        "[source_code_repo]\nconnection_address = http://primary:3000/dsm-src\n"
+        "fallback_connection_address = http://backup:3000/dsm-mirror\n",
+        encoding="utf-8",
+    )
+
+    assert load(ini).data_sources[0].fallback_connection_address == "http://backup:3000/dsm-mirror"
 
 
 def test_missing_file_yields_defaults(tmp_path):

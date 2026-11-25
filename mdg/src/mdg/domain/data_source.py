@@ -17,12 +17,15 @@ class SourceType(Enum):
 @dataclass(frozen=True)
 class DataSourceConfig:
     """Source type, name, access method, connection address and user information
-    of one data source (req 4)."""
+    of one data source (req 4), with the optional second address of a source code
+    repository that is tried when the first one lacks a repository or cannot be
+    reached."""
     source_type: SourceType
     source_name: str
     access_method: str
     connection_address: str
     user_info: str
+    fallback_connection_address: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -31,6 +34,7 @@ class DataSourceConfig:
             "access_method": self.access_method,
             "connection_address": self.connection_address,
             "user_info": self.user_info,
+            "fallback_connection_address": self.fallback_connection_address,
         }
 
     @classmethod
@@ -41,4 +45,5 @@ class DataSourceConfig:
             access_method=data["access_method"],
             connection_address=data["connection_address"],
             user_info=data["user_info"],
+            fallback_connection_address=data.get("fallback_connection_address", ""),
         )

@@ -56,6 +56,7 @@ def load(path: Path = DVE_INI) -> Config:
             text(source_type.value, "access_method", ""),
             text(source_type.value, "connection_address", ""),
             "",
+            text(source_type.value, "fallback_connection_address", ""),
         )
         for source_type in SourceType if ini.has_section(source_type.value)
     ]

@@ -35,7 +35,19 @@ def test_connect_keeps_the_defaults_name_and_method_with_the_sessions_credential
     source = data_sources.connected(token)[SourceType.SOURCE_CODE_REPO]
     assert (source.source_name, source.access_method) == ("gitea", "git")
     assert (source.connection_address, source.user_info) == (seed.SOURCE_REPO_URL, "dsm:dsm")
+    assert source.fallback_connection_address == seed.FALLBACK_SOURCE_REPO_URL
     assert SourceType.CONFIG_MGMT_DB not in data_sources.connected(token)
+
+
+def test_connect_keeps_the_configured_second_address_for_another_first_one():
+    data_sources = _service()
+    token = data_sources.open()
+
+    data_sources.connect(token, SourceType.SOURCE_CODE_REPO, "http://elsewhere:3000/other", seed.USER, seed.PASSWORD)
+
+    source = data_sources.connected(token)[SourceType.SOURCE_CODE_REPO]
+    assert source.connection_address == "http://elsewhere:3000/other"
+    assert source.fallback_connection_address == seed.FALLBACK_SOURCE_REPO_URL
 
 
 def test_config_mgmt_db_is_verified_when_connected():

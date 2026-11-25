@@ -409,6 +409,7 @@ def test_run_starts_a_production_with_the_sessions_sources_and_user(make_runtime
     assert selection == seed.SELECTION
     assert sources[SourceType.CONFIG_MGMT_DB.value]["user_info"] == f"{seed.USER}:{seed.PASSWORD}"
     assert sources[SourceType.SOURCE_CODE_REPO.value]["connection_address"] == seed.SOURCE_REPO_URL
+    assert sources[SourceType.SOURCE_CODE_REPO.value]["fallback_connection_address"] == seed.FALLBACK_SOURCE_REPO_URL
     assert (produced_by, candidates) == (seed.OPERATOR, seed.CANDIDATES)
     assert task_id
 

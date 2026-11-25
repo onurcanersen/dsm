@@ -17,6 +17,7 @@ USER = "dsm"
 PASSWORD = "dsm"  # NOSONAR dev-stack stand-in from dev/compose.yaml, not a real credential
 CONFIG_DB_ADDRESS = "localhost:3306/cmdb"
 SOURCE_REPO_URL = "http://localhost:3000/dsm-src"
+FALLBACK_SOURCE_REPO_URL = "http://localhost:3000/dsm-mirror"
 RUN_1 = "run-1"
 RUN_2 = "run-2"
 FILE_NAME = f"{PROJECT}_{PLATFORM}_{VERSION}.json"
@@ -28,7 +29,9 @@ UNIT_VERSIONS = {SENSOR_APP: [CANDIDATE_VERSION, "1.0.1", VERSION]}
 
 DEFAULTS = {
     SourceType.CONFIG_MGMT_DB: DataSourceConfig(SourceType.CONFIG_MGMT_DB, "mysql", "mysql", CONFIG_DB_ADDRESS, ""),
-    SourceType.SOURCE_CODE_REPO: DataSourceConfig(SourceType.SOURCE_CODE_REPO, "gitea", "git", SOURCE_REPO_URL, ""),
+    SourceType.SOURCE_CODE_REPO: DataSourceConfig(
+        SourceType.SOURCE_CODE_REPO, "gitea", "git", SOURCE_REPO_URL, "", FALLBACK_SOURCE_REPO_URL
+    ),
 }
 
 

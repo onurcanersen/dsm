@@ -1,6 +1,7 @@
-"""The git adapter with subprocess mocked: clone command, error mapping,
-acquired file records and version listing (SRS DSM-MDG req 11, 13-16)."""
+"""The git adapter with subprocess mocked: clone command, error mapping, acquired
+file records, version listing and the second address (SRS DSM-MDG req 11, 13-16)."""
 
+import logging
 import subprocess
 from pathlib import Path
 
@@ -11,16 +12,28 @@ from mdg.adapters.source_code.git_source_code_repository import GitSourceCodeRep
 from mdg.adapters.source_code.mandatory_files import MandatoryFiles
 from mdg.domain.data_source import DataSourceConfig, SourceType
 from mdg.domain.inventory import SoftwareUnitVersion
-from mdg.ports.source_code_repository import SourceRepoAccessError, SourceRepoAuthError, SourceRepoIntegrityError
+from mdg.ports.source_code_repository import (
+    SourceRepoAccessError,
+    SourceRepoAuthError,
+    SourceRepoIntegrityError,
+    SourceRepoOfflineError,
+)
 
 NAV_APP = SoftwareUnitVersion(seed.NAV_APP, seed.VERSION)
+SENSOR_APP = SoftwareUnitVersion(seed.SENSOR_APP, seed.VERSION)
 
 
 SECRET = "s3cr3t@pw"
+NOT_FOUND = "fatal: repository not found"
+UNREACHABLE = "fatal: unable to access 'http://localhost:3000/': Failed to connect to localhost port 3000: Connection refused"
+AUTH_REFUSED = "fatal: Authentication failed"
+LOGGER = "mdg.adapters.source_code.git_source_code_repository"
 
 
-def _repository(credentials: str = seed.CREDENTIALS) -> GitSourceCodeRepository:
-    source = DataSourceConfig(SourceType.SOURCE_CODE_REPO, "gitea", "git", seed.SOURCE_REPO_URL, credentials)
+def _repository(credentials: str = seed.CREDENTIALS, fallback: str = "") -> GitSourceCodeRepository:
+    source = DataSourceConfig(
+        SourceType.SOURCE_CODE_REPO, "gitea", "git", seed.SOURCE_REPO_URL, credentials, fallback
+    )
     return GitSourceCodeRepository.from_data_source_config(source, MandatoryFiles([seed.MAKEFILE_INCLUDE]), seed.SYSTEM_REPO)
 
 
@@ -31,6 +44,24 @@ def _fake_git(monkeypatch, stdout="", returncode=0, stderr="", captured=None, ca
         if captured_env is not None:
             captured_env.append(kwargs.get("env"))
         return subprocess.CompletedProcess(cmd, returncode, stdout=stdout, stderr=stderr)
+
+    monkeypatch.setattr("mdg.adapters.source_code.git_source_code_repository.subprocess.run", run)
+
+
+def _fake_git_calls(monkeypatch, outcomes, captured=None):
+    """Answers every git call with the next (returncode, stderr[, stdout]) outcome;
+    a call beyond the outcomes a test lists fails it, which is how a test says that
+    nothing was retried."""
+    remaining = list(outcomes)
+
+    def run(cmd, **kwargs):
+        if captured is not None:
+            captured.append(cmd)
+        assert remaining, f"unexpected git call: {' '.join(cmd[-3:])}"
+        returncode, stderr, *stdout = remaining.pop(0)
+        if returncode is None:
+            raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+        return subprocess.CompletedProcess(cmd, returncode, stdout=stdout[0] if stdout else "", stderr=stderr)
 
     monkeypatch.setattr("mdg.adapters.source_code.git_source_code_repository.subprocess.run", run)
 
@@ -102,13 +133,152 @@ def test_clone_asks_for_the_version_tag_of_the_org_repository(monkeypatch, tmp_p
 
 
 def test_git_failures_map_to_the_port_errors(monkeypatch, tmp_path: Path):
-    _fake_git(monkeypatch, returncode=128, stderr="fatal: Authentication failed")
+    _fake_git(monkeypatch, returncode=128, stderr=AUTH_REFUSED)
     with pytest.raises(SourceRepoAuthError, match=seed.NAV_APP):
         _repository().clone(NAV_APP, tmp_path)
 
-    _fake_git(monkeypatch, returncode=128, stderr="fatal: repository not found")
-    with pytest.raises(SourceRepoAccessError, match="repository not found"):
+    _fake_git(monkeypatch, returncode=128, stderr=NOT_FOUND)
+    with pytest.raises(SourceRepoAccessError, match=NOT_FOUND):
         _repository().clone(NAV_APP, tmp_path)
+
+    _fake_git(monkeypatch, returncode=128, stderr=UNREACHABLE)
+    with pytest.raises(SourceRepoOfflineError, match=seed.NAV_APP):
+        _repository().clone(NAV_APP, tmp_path)
+
+
+def test_one_address_reports_the_failure_as_before(monkeypatch, tmp_path: Path):
+    _fake_git(monkeypatch, returncode=128, stderr=NOT_FOUND)
+
+    with pytest.raises(SourceRepoAccessError) as error:
+        _repository().clone(NAV_APP, tmp_path)
+
+    assert str(error.value) == f"Could not clone '{seed.NAV_APP}' at '{seed.VERSION}': {NOT_FOUND}"
+
+
+def test_a_repository_absent_at_the_first_address_is_cloned_from_the_second(monkeypatch, tmp_path: Path, caplog):
+    captured = []
+    _fake_git_calls(monkeypatch, [(128, NOT_FOUND), (0, "")], captured)
+    caplog.set_level(logging.DEBUG, logger=LOGGER)
+
+    unit_dir = _repository(fallback=seed.FALLBACK_SOURCE_REPO_URL).clone(NAV_APP, tmp_path)
+
+    assert unit_dir == tmp_path / seed.NAV_APP
+    assert [command[-2] for command in captured] == [
+        "http://localhost:3000/dsm-src/nav_app.git",
+        "http://backup:3000/dsm-mirror/nav_app.git",
+    ]
+    assert "from the fallback address 'http://backup:3000/dsm-mirror'" in caplog.text
+
+
+def test_a_repository_the_first_address_lacks_is_worth_no_warning(monkeypatch, tmp_path: Path, caplog):
+    _fake_git_calls(monkeypatch, [(128, NOT_FOUND), (0, "")])
+    caplog.set_level(logging.DEBUG, logger=LOGGER)
+
+    _repository(fallback=seed.FALLBACK_SOURCE_REPO_URL).clone(NAV_APP, tmp_path)
+
+    assert [record.levelno for record in caplog.records if record.name == LOGGER] == [logging.DEBUG, logging.INFO]
+    assert seed.SOURCE_REPO_URL in caplog.records[0].getMessage()
+
+
+def test_a_repository_no_address_holds_warns_once_about_both(monkeypatch, tmp_path: Path, caplog):
+    _fake_git_calls(monkeypatch, [(128, NOT_FOUND), (128, NOT_FOUND)])
+    caplog.set_level(logging.DEBUG, logger=LOGGER)
+
+    with pytest.raises(SourceRepoAccessError):
+        _repository(fallback=seed.FALLBACK_SOURCE_REPO_URL).clone(NAV_APP, tmp_path)
+
+    assert [record.levelno for record in caplog.records if record.name == LOGGER] == [logging.DEBUG, logging.DEBUG, logging.WARNING]
+    assert seed.SOURCE_REPO_URL in caplog.text and seed.FALLBACK_SOURCE_REPO_URL in caplog.text
+
+
+def test_refused_credentials_are_never_tried_at_the_second_address(monkeypatch, tmp_path: Path):
+    captured = []
+    _fake_git_calls(monkeypatch, [(128, AUTH_REFUSED)], captured)
+
+    with pytest.raises(SourceRepoAuthError, match=seed.NAV_APP):
+        _repository(fallback=seed.FALLBACK_SOURCE_REPO_URL).clone(NAV_APP, tmp_path)
+
+    assert len(captured) == 1
+
+
+def test_an_address_that_cannot_be_reached_is_left_out_of_the_rest_of_the_run(monkeypatch, tmp_path: Path):
+    captured = []
+    _fake_git_calls(monkeypatch, [(128, UNREACHABLE), (0, ""), (0, "")], captured)
+    repository = _repository(fallback=seed.FALLBACK_SOURCE_REPO_URL)
+
+    repository.clone(NAV_APP, tmp_path)
+    repository.clone(SENSOR_APP, tmp_path)
+
+    assert [command[-2] for command in captured] == [
+        "http://localhost:3000/dsm-src/nav_app.git",
+        "http://backup:3000/dsm-mirror/nav_app.git",
+        "http://backup:3000/dsm-mirror/sensor_app.git",
+    ]
+
+
+def test_a_failed_clone_clears_the_destination_before_the_next_address(monkeypatch, tmp_path: Path):
+    unit_dir = tmp_path / seed.NAV_APP
+    present = []
+
+    def run(cmd, **kwargs):
+        present.append(unit_dir.exists())
+        if len(present) == 1:
+            unit_dir.mkdir(parents=True)
+            return subprocess.CompletedProcess(cmd, 128, stdout="", stderr=UNREACHABLE)
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr("mdg.adapters.source_code.git_source_code_repository.subprocess.run", run)
+
+    _repository(fallback=seed.FALLBACK_SOURCE_REPO_URL).clone(NAV_APP, tmp_path)
+
+    assert present == [False, False]
+
+
+def test_a_time_out_at_the_first_address_falls_back_too(monkeypatch, tmp_path: Path):
+    captured = []
+    _fake_git_calls(monkeypatch, [(None, ""), (0, "")], captured)
+
+    _repository(fallback=seed.FALLBACK_SOURCE_REPO_URL).clone(NAV_APP, tmp_path)
+
+    assert len(captured) == 2 and captured[1][-2].startswith("http://backup:3000/")
+
+
+def test_a_repository_absent_at_both_addresses_names_both(monkeypatch, tmp_path: Path):
+    _fake_git_calls(monkeypatch, [(128, NOT_FOUND), (128, NOT_FOUND)])
+
+    with pytest.raises(SourceRepoAccessError) as error:
+        _repository(fallback=seed.FALLBACK_SOURCE_REPO_URL).clone(NAV_APP, tmp_path)
+
+    message = str(error.value)
+    assert "repository not found" in message and seed.SOURCE_REPO_URL in message and seed.FALLBACK_SOURCE_REPO_URL in message
+
+
+def test_the_second_address_is_redacted_like_the_first(monkeypatch, tmp_path: Path):
+    _fake_git_calls(monkeypatch, [(128, f"fatal: unable to access 'http://dsm:{SECRET}@localhost/'"), (128, NOT_FOUND)])
+
+    with pytest.raises(SourceRepoAccessError) as error:
+        _repository(f"dsm:{SECRET}", fallback=f"http://dsm:{SECRET}@backup:3000/dsm-mirror").clone(NAV_APP, tmp_path)
+
+    assert SECRET not in str(error.value) and "backup:3000" in str(error.value)
+
+
+def test_check_access_and_the_versions_also_use_the_second_address(monkeypatch):
+    captured = []
+    _fake_git_calls(monkeypatch, [(128, NOT_FOUND), (0, "")], captured)
+    repository = _repository(fallback=seed.FALLBACK_SOURCE_REPO_URL)
+
+    repository.check_access()
+
+    assert [command[-1] for command in captured] == [
+        "http://localhost:3000/dsm-src/system_repo.git",
+        "http://backup:3000/dsm-mirror/system_repo.git",
+    ]
+
+    captured.clear()
+    _fake_git_calls(monkeypatch, [(128, NOT_FOUND), (0, "", "9f1c\trefs/tags/1.0.0\n")], captured)
+
+    assert repository.list_versions(seed.SENSOR_APP) == ["1.0.0"]
+    assert captured[1][-1] == "http://backup:3000/dsm-mirror/sensor_app.git"
 
 
 def test_acquired_files_record_the_mandatory_files_at_the_paths_found(tmp_path: Path):

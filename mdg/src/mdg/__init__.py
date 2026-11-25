@@ -40,6 +40,7 @@ from mdg.ports.source_code_repository import (
     SourceRepoAccessError,
     SourceRepoAuthError,
     SourceRepoIntegrityError,
+    SourceRepoOfflineError,
 )
 from mdg.services.acquire_project_context import AcquireProjectContext
 from mdg.services.acquire_source_code import AcquireSourceCode
@@ -64,6 +65,7 @@ __all__ = [
     "SourceRepoAccessError",
     "SourceRepoAuthError",
     "SourceRepoIntegrityError",
+    "SourceRepoOfflineError",
     "SourceType",
     "config_management_repository",
     "model_setup_data_store",

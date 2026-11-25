@@ -15,6 +15,12 @@ class SourceRepoAccessError(Exception):
     """The repository could not be accessed (req 16)."""
 
 
+class SourceRepoOfflineError(SourceRepoAccessError):
+    """The address of the repository could not be reached at all, as opposed to
+    answering that it does not hold the repository (req 16); it is what makes an
+    address be left out of the rest of a run once a second address is known."""
+
+
 class SourceRepoAuthError(Exception):
     """The repository refused the credentials (req 16)."""
 
@@ -24,7 +30,9 @@ class SourceRepoIntegrityError(Exception):
 
 
 class ISourceCodeRepository(ABC):
-    """Clones software unit repositories and records the mandatory files they hold."""
+    """Clones software unit repositories and records the mandatory files they hold.
+    An implementation may serve a unit from a second address when the first one does
+    not hold the repository or cannot be reached (req 16)."""
 
     @abstractmethod
     def check_access(self) -> None:

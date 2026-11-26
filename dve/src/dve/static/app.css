@@ -847,9 +847,8 @@ html::-webkit-scrollbar-corner,
 }
 
 /* The run panel takes the left half of the deck; the ship on the background
-   keeps the right. The message under it follows its edge. */
-.shell--run .runpanel,
-.shell--run #run-message {
+   keeps the right. */
+.shell--run .runpanel {
   box-sizing: border-box;
   width: var(--w-run);
   align-self: flex-start;
@@ -1762,10 +1761,6 @@ html::-webkit-scrollbar-corner,
   display: inline-block;
 }
 
-.vedit--failed .vedit__button {
-  color: var(--danger);
-}
-
 .vedit .picker {
   flex: none;
   max-width: 100%;
@@ -2081,16 +2076,15 @@ html::-webkit-scrollbar-corner,
   color: var(--ink);
 }
 
-/* On the run view the console takes what the bar leaves. */
+/* On the run view the console takes what the bar and the message leave. */
 .shell--run .console {
   height: auto;
   flex: 1 1 auto;
-  min-height: 14rem;
+  min-height: 0;
 }
 
-/* The context line and the message keep their height; only the console gives up room. */
-.shell--run .context,
-.shell--run #run-message {
+/* The context line keeps its height; only the console gives up room. */
+.shell--run .context {
   flex: none;
 }
 
@@ -2098,6 +2092,15 @@ html::-webkit-scrollbar-corner,
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* The run's message is a message strip like every other card's, inset in the
+   panel under its log so the deck still reads as one framed card. */
+.runpanel .message {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  margin: 0 1.2rem 1.2rem;
 }
 
 /* One log line as three columns: clock, level, message: the clock muted,
@@ -2405,8 +2408,7 @@ html::-webkit-scrollbar-corner,
   }
 
   /* No room for a half column: the run panel spans the deck again. */
-  .shell--run .runpanel,
-  .shell--run #run-message {
+  .shell--run .runpanel {
     width: 100%;
   }
 

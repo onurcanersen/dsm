@@ -1123,7 +1123,8 @@
   }
 
   // Rebuilds the row's control from what is known: the edit icon (spinning while
-  // the read runs, red after a failure) or the select with the versions read.
+  // the read runs) or the select with the versions read. A failed read only
+  // reports in the card's message strip and the row's tooltip.
   function paintRowPicker(unitName, focusSelect) {
     var row = unitRowNode(unitName);
     if (!row) {
@@ -1133,7 +1134,6 @@
     var versions = candidateVersions[unitName];
     host.textContent = "";
     host.classList.toggle("vedit--loading", !!versionReads[unitName]);
-    host.classList.toggle("vedit--failed", versions === null);
     host.title = versions === null ? "The published versions of " + unitName + " could not be read. Click to retry." : "";
 
     if (!Array.isArray(versions)) {

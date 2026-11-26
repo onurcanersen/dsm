@@ -536,8 +536,11 @@
             </div>
 
             <!-- Search of the tree: boxes, rows and relation cards by name,
-                 narrowed by type; a pick opens, centres and lights it (req 43). -->
-            <div class="gsearch mpanel" id="graph-search" hidden>
+                 narrowed by type in the software view; a pick opens, centres
+                 and lights it (req 43). Its filters are marked off until
+                 graph.js makes the chips, which is also when it takes its
+                 corner brackets (see .gsearch in the stylesheet). -->
+            <div class="gsearch mpanel" id="graph-search" data-filters="off" hidden>
               <div class="mpanel__blur"></div>
               <div class="mpanel__corners"></div>
               <div class="mpanel__body gsearch__body">
@@ -556,30 +559,32 @@
                     <i class="lucide lucide-x"></i>
                   </button>
                 </label>
-                <!-- The type chips, in a titled row like the hardware view's filters. -->
-                <div class="gfilter__row">
+                <!-- The type chips of the software view, in a titled row like
+                     its filters and in the alphabet their labels spell; they
+                     narrow the search, never the picture. -->
+                <div class="gfilter__row" data-mode="sw">
                   <span class="gfilter__title">Types</span>
                   <div class="gsearch__chips gfilter__chips" aria-label="Filter by type">
-                    <button type="button" class="gsearch__chip" data-type="hierarchy" data-mode="sw" aria-pressed="false">Hierarchy</button>
-                    <button type="button" class="gsearch__chip" data-type="csu" data-mode="sw" aria-pressed="false">CSU</button>
+                    <button type="button" class="gsearch__chip" data-type="csu" aria-pressed="false">CSU</button>
+                    <button type="button" class="gsearch__chip" data-type="hierarchy" aria-pressed="false">Hierarchy</button>
+                    <button type="button" class="gsearch__chip" data-type="lib" aria-pressed="false">Library</button>
+                    <button type="button" class="gsearch__chip" data-type="message" aria-pressed="false">Message</button>
                     <button type="button" class="gsearch__chip" data-type="node" aria-pressed="false">Node</button>
-                    <button type="button" class="gsearch__chip" data-type="network" data-mode="hw" aria-pressed="false">Network</button>
-                    <button type="button" class="gsearch__chip" data-type="topic" data-mode="sw" aria-pressed="false">Topic</button>
-                    <button type="button" class="gsearch__chip" data-type="message" data-mode="sw" aria-pressed="false">Message</button>
-                    <button type="button" class="gsearch__chip" data-type="lib" data-mode="sw" aria-pressed="false">Library</button>
-                    <button type="button" class="gsearch__chip" data-type="relation" data-mode="sw" aria-pressed="false">Relation</button>
+                    <button type="button" class="gsearch__chip" data-type="relation" aria-pressed="false">Relation</button>
+                    <button type="button" class="gsearch__chip" data-type="topic" aria-pressed="false">Topic</button>
                   </div>
                 </div>
                 <!-- The hardware view's filters: a chip per network and per
-                     node group, filled by graph.js for each model. -->
+                     node group, each pressed while its item is on the picture,
+                     filled by graph.js for each model. -->
                 <div class="gfilter" data-mode="hw" hidden>
                   <div class="gfilter__row" hidden>
                     <span class="gfilter__title">Networks</span>
-                    <div class="gfilter__chips" data-filter="networks" aria-label="Filter by network"></div>
+                    <div class="gfilter__chips" data-filter="networks" aria-label="Show networks"></div>
                   </div>
                   <div class="gfilter__row" hidden>
                     <span class="gfilter__title">Groups</span>
-                    <div class="gfilter__chips" data-filter="groups" aria-label="Filter by node group"></div>
+                    <div class="gfilter__chips" data-filter="groups" aria-label="Open node groups"></div>
                   </div>
                 </div>
                 <p class="gsearch__count" role="status" hidden></p>

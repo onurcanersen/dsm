@@ -2674,14 +2674,26 @@ body.body--graph::before {
   display: none;
 }
 
-/* The chips of the other mode stay out of sight. */
+/* What belongs to the other view stays out of sight. */
 .gsearch[data-mode="hw"] [data-mode="sw"],
 .gsearch[data-mode="sw"] [data-mode="hw"] {
   display: none;
 }
 
-/* A titled row of chips: the types, and in the hardware view a row per
-   filter set (networks, node groups). */
+/* A hardware view with no filters to show is the field alone, and the frame's
+   brackets are sized for a card of some height: the top pair reach 7.6rem into
+   it and the bottom pair 5.2rem up from its foot, so on a card that short they
+   would meet in the middle of the field. Such a card wears the rim and the
+   frosted fill without its brackets, and takes them back once graph.js has
+   made the chips (see fillFilters). */
+.gsearch[data-mode="hw"][data-filters="off"]::before,
+.gsearch[data-mode="hw"][data-filters="off"]::after,
+.gsearch[data-mode="hw"][data-filters="off"] .mpanel__corners {
+  display: none;
+}
+
+/* A titled row of chips: in the hardware view, one per filter set
+   (networks, node groups). */
 .gfilter {
   flex: none;
   display: flex;
@@ -2715,7 +2727,8 @@ body.body--graph::before {
 }
 
 /* A chip: the page's pill (.chip), pressed in its hue (--bus: a network's
-   own, cyan otherwise). None pressed in a row means every one. */
+   own, cyan otherwise). A chip is pressed while its item is on the picture,
+   so the rows read as its legend (graph.js). */
 .gsearch__chip {
   --bus: var(--cyan);
   display: inline-flex;
@@ -2731,7 +2744,7 @@ body.body--graph::before {
   letter-spacing: var(--ls-tight);
   text-transform: uppercase;
   cursor: pointer;
-  transition: color var(--t), border-color var(--t), background-color var(--t);
+  transition: color var(--t), border-color var(--t), background-color var(--t), box-shadow var(--t);
 }
 
 .gsearch__chip:hover {
@@ -2745,12 +2758,41 @@ body.body--graph::before {
   background-color: color-mix(in srgb, var(--bus) 14%, transparent);
 }
 
+/* A pressed filter chip is on rather than merely picked: the mode switch's
+   light in the chip's own hue, so an open cabinet's chip reads active across
+   the card and the closed ones stay plain pills. */
+.gfilter__chip[aria-pressed="true"] {
+  box-shadow: 0 0 8px color-mix(in srgb, var(--bus) 26%, transparent);
+  text-shadow: 0 0 6px color-mix(in srgb, var(--bus) 55%, transparent);
+}
+
+/* The open cabinets' chips take a filled face on top of the light, so the
+   groups row reads as the row you switch on. Only these: they always wear the
+   page's cyan, while a filled face in the networks' dimmer hues would eat the
+   contrast of their own legend — and the networks row, all pressed to start
+   with, keeps one look across the row. */
+.gfilter__chip[data-set="groups"][aria-pressed="true"] {
+  background-color: color-mix(in srgb, var(--bus) 24%, transparent);
+}
+
 .gfilter__dot {
   width: .7rem;
   height: .7rem;
   border-radius: 50%;
   background: var(--bus);
   box-shadow: 0 0 4px color-mix(in srgb, var(--bus) 60%, transparent);
+}
+
+/* How many nodes a group's chip opens, quiet beside its name so the name
+   leads; it lifts to the chip's own colour once the cabinet is open. */
+.gfilter__tally {
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  opacity: .55;
+}
+
+.gsearch__chip[aria-pressed="true"] .gfilter__tally {
+  opacity: .8;
 }
 
 /* The match count under the chips. */

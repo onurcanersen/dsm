@@ -89,8 +89,9 @@
   var tree = null;
   // The model last loaded, for Collapse all to rebuild from.
   var lastModel = null;
-  // The hardware view's filter: the networks and node groups picked in
-  // the panel, by id and by name; none picked in a set means every one.
+  // The hardware view's filter, both rows sets of what the picture holds: the
+  // networks shown by id, which every model starts with, and the node groups
+  // whose cabinets stand open by name, which it starts with none of.
   var filter = { networks: {}, groups: {} };
   // The search's one lit target { nodeId, ref } (req 43), ref null for a box
   // alone; rowsHtml reads it so a re-render keeps the row lit.
@@ -390,11 +391,11 @@
     };
   }
 
-  // The buses top to bottom: the fullest first (the shortest taps), the
-  // empty ones last, names breaking ties.
+  // The buses top to bottom, in the alphabet of their names; the chips of the
+  // networks row are made in this order, so it is also the legend's.
   function orderBuses(index) {
     return Object.keys(index.networks).sort(function (a, b) {
-      return (index.members[b] || []).length - (index.members[a] || []).length || compareText(index.networks[a].name, index.networks[b].name);
+      return compareText(index.networks[a].name, index.networks[b].name);
     });
   }
 
@@ -410,13 +411,27 @@
     return columns;
   }
 
-  // Whether a set of picks lets the key through: every key when none is picked.
-  function picked(set, key) {
-    return !Object.keys(set).length || !!set[key];
+  // Whether a chip's item is on the picture: both filter rows are plain sets
+  // of what is shown, so a chip is pressed exactly while its bus or cabinet
+  // is drawn and the picture never shows what its chips deny. (Not `shown`,
+  // which is the dash for a value a model does not carry.)
+  function onPicture(set, key) {
+    return !!set[key];
+  }
+
+  // A model's opening filter: every bus on the picture, no cabinet open. The
+  // networks row starts fully pressed because it starts fully drawn. (With no
+  // index, the software view, there is nothing to show or hide.)
+  function openingFilter(index) {
+    var networks = {};
+    (index ? orderBuses(index) : []).forEach(function (busId) {
+      networks[busId] = true;
+    });
+    return { networks: networks, groups: {} };
   }
 
   // The hardware picture as G6 graph data with positions set (see above),
-  // narrowed to the networks and groups picked (see filter).
+  // to the networks shown and the groups opened (see filter).
   function buildHardware(msd, picks) {
     var index = hardwareIndex(msd);
     var labels = {};
@@ -430,19 +445,19 @@
     // some never repaints the rest (the chips keep the same hues).
     var allBuses = orderBuses(index);
     var busIds = allBuses.filter(function (id) {
-      return picked(picks.networks, id);
+      return onPicture(picks.networks, id);
     });
     var shownBus = {};
     busIds.forEach(function (id) {
       shownBus[id] = true;
     });
 
-    // The cards: every node of a picked group on a shown network, in group
+    // The cards: every node of an opened group on a shown network, in group
     // order (the ungrouped last) and by name within a group.
     var cardIds = Object.keys(index.nodes)
       .filter(function (id) {
         return (
-          picked(picks.groups, groupOf(index.nodes[id])) &&
+          onPicture(picks.groups, groupOf(index.nodes[id])) &&
           (index.homes[id] || []).some(function (link) {
             return shownBus[link.network];
           })
@@ -1826,14 +1841,15 @@
 
   // Draws the picture of the current mode; with a snapshot, as it was left.
   function render(msd, shot) {
-    filter = shot && shot.filter ? shot.filter : { networks: {}, groups: {} };
+    var index = mode === "hw" ? hardwareIndex(msd) : null;
+    filter = shot && shot.filter ? shot.filter : openingFilter(index);
     tree = mode === "hw" ? buildHardware(msd, filter) : buildTree(msd);
     if (shot && shot.open) {
       reopen(tree.data, shot.open);
     }
     lit = null;
-    resetChips();
-    fillFilters(mode === "hw" ? hardwareIndex(msd) : null);
+    releaseTypeChips();
+    fillFilters(index);
     pressFilterChips();
     pending = Promise.resolve();
     if (graph) {
@@ -1979,9 +1995,9 @@
   // then by type in this order, then shortest name first.
   var TYPE_ORDER = { csu: 0, hierarchy: 1, node: 2, network: 2, topic: 3, message: 4, lib: 5, relation: 6 };
 
-  // The panel's state: the pressed chips, the rows on show, the selected row
-  // (lit until the next pick or query change) and the entity refs whose
-  // per-CSU lines are open.
+  // The panel's state: the pressed type chips of the software view, the rows
+  // on show, the selected row (lit until the next pick or query change) and
+  // the entity refs whose per-CSU lines are open.
   var types = [];
   var rows = [];
   var cursor = -1;
@@ -2116,6 +2132,17 @@
     var active = el.results.children[cursor];
     if (active && active.scrollIntoView) {
       active.scrollIntoView({ block: "nearest" });
+    }
+  }
+
+  // Every type chip released: a new picture starts its search with every
+  // type on, and the search of the other view never inherits this one's.
+  function releaseTypeChips() {
+    types = [];
+    if (el.panel) {
+      Array.prototype.forEach.call(el.panel.querySelectorAll(".gsearch__chip[data-type]"), function (chip) {
+        chip.setAttribute("aria-pressed", "false");
+      });
     }
   }
 
@@ -2346,11 +2373,10 @@
     hideTooltip();
     hideRowTip();
     if (!nodeData(nodeId)) {
-      // A card the hardware filter keeps off the picture: the filter is
-      // released and the picture redrawn whole, then the card is found.
-      if (mode === "hw" && (Object.keys(filter.networks).length || Object.keys(filter.groups).length)) {
-        filter = { networks: {}, groups: {} };
-        pressFilterChips();
+      // A card the hardware filter keeps off the picture: its cabinet is
+      // opened (and a narrowed network it taps let through), the picture
+      // redrawn, and then the card is found.
+      if (mode === "hw" && lastModel && openFor(nodeId)) {
         return refilter().then(function () {
           return nodeData(nodeId) ? goTo(nodeId, ref) : undefined;
         });
@@ -2384,21 +2410,13 @@
     return pending;
   }
 
-  // Every chip released: a new picture starts with every type on.
-  function resetChips() {
-    types = [];
-    cursor = -1;
-    if (el.panel) {
-      Array.prototype.forEach.call(el.panel.querySelectorAll(".gsearch__chip"), function (chip) {
-        chip.setAttribute("aria-pressed", "false");
-      });
-    }
-  }
-
-  /* The hardware view's filters (the panel's .gfilter): a chip per
-   * network, in bus order and in its hue, and a chip per node group. A
-   * pressed chip narrows the picture to it; none pressed in a row means
-   * every one. The chips are made afresh for every model. */
+  /* The hardware view's filters (the panel's .gfilter): a chip per network,
+   * in bus order (its name's alphabet, see orderBuses) and in its hue, and a
+   * chip per node group, in the same alphabet with the ungrouped last. A
+   * pressed chip's bus is drawn and a pressed group's cabinet stands open, so
+   * the chips read as the picture's legend: the view opens with every network
+   * pressed and no cabinet open, and a chip lights as its item appears. The
+   * chips are made afresh for every model. */
 
   function fillFilters(index) {
     if (!el.filter) {
@@ -2409,7 +2427,7 @@
     networks.innerHTML = "";
     groups.innerHTML = "";
     if (!index) {
-      el.filter.hidden = true;
+      markFilters(false);
       return;
     }
     orderBuses(index).forEach(function (busId, k) {
@@ -2417,21 +2435,33 @@
     });
     var seen = {};
     Object.keys(index.nodes).forEach(function (nodeId) {
-      seen[groupOf(index.nodes[nodeId])] = true;
+      var group = groupOf(index.nodes[nodeId]);
+      seen[group] = (seen[group] || 0) + 1;
     });
     Object.keys(seen)
       .sort(function (a, b) {
         return (a === "") - (b === "") || compareText(a, b);
       })
       .forEach(function (group) {
-        groups.appendChild(filterChip("groups", group, group || "ungrouped", null));
+        groups.appendChild(filterChip("groups", group, group || "ungrouped", null, seen[group]));
       });
     networks.parentNode.hidden = !networks.childNodes.length;
     groups.parentNode.hidden = !groups.childNodes.length;
-    el.filter.hidden = !networks.childNodes.length && !groups.childNodes.length;
+    markFilters(!!(networks.childNodes.length || groups.childNodes.length));
   }
 
-  function filterChip(set, key, label, hue) {
+  // Whether the filters are on show, both to the rows themselves and to the
+  // card around them: the card's corner brackets are sized for a card of some
+  // height, so a hardware view without them is marked as bare of filters and
+  // wears none until the chips are made (see .gsearch in the stylesheet).
+  function markFilters(shown) {
+    el.filter.hidden = !shown;
+    if (el.panel) {
+      el.panel.setAttribute("data-filters", shown ? "on" : "off");
+    }
+  }
+
+  function filterChip(set, key, label, hue, count) {
     var chip = document.createElement("button");
     chip.type = "button";
     chip.className = "gsearch__chip gfilter__chip";
@@ -2445,6 +2475,14 @@
       chip.appendChild(dot);
     }
     chip.appendChild(document.createTextNode(label));
+    if (count !== undefined) {
+      // How many nodes the cabinet this chip opens holds.
+      var tally = document.createElement("i");
+      tally.className = "gfilter__tally";
+      tally.title = plural(count, "node");
+      tally.textContent = String(count);
+      chip.appendChild(tally);
+    }
     chip.addEventListener("click", function () {
       var on = chip.getAttribute("aria-pressed") !== "true";
       chip.setAttribute("aria-pressed", on ? "true" : "false");
@@ -2453,24 +2491,98 @@
       } else {
         delete filter[set][key];
       }
-      refilter();
+      // Opening a cabinet brings it on screen; closing one only refits.
+      refilter(on && set === "groups" ? key : undefined);
     });
     return chip;
   }
 
-  // Presses the chips of the current filter, after the chips are made afresh.
+  // Presses the chips of the current filter, after the chips are made afresh:
+  // a chip is pressed while its item is on the picture.
   function pressFilterChips() {
     if (!el.filter) {
       return;
     }
-    Array.prototype.forEach.call(el.filter.querySelectorAll(".gfilter__chip"), function (chip) {
-      var on = !!filter[chip.getAttribute("data-set")][chip.getAttribute("data-key")];
+    Array.prototype.forEach.call(el.filter.querySelectorAll(".gfilter__chip[data-set]"), function (chip) {
+      var on = onPicture(filter[chip.getAttribute("data-set")], chip.getAttribute("data-key"));
       chip.setAttribute("aria-pressed", on ? "true" : "false");
     });
   }
 
-  // Redraws the hardware picture under the current filter, fitted anew.
-  function refilter() {
+  // Opens the filter around a card the picture keeps off: its group's
+  // cabinet, and any bus it taps that is hidden. Whether the filter changed;
+  // a node on no network has no card either way, so nothing opens for it.
+  function openFor(nodeId) {
+    var index = hardwareIndex(lastModel);
+    var node = index.nodes[nodeId];
+    var links = (node && index.homes[nodeId]) || [];
+    if (!node || !links.length) {
+      return false;
+    }
+    var changed = false;
+    var group = groupOf(node);
+    if (!filter.groups[group]) {
+      filter.groups[group] = true;
+      changed = true;
+    }
+    links.forEach(function (link) {
+      if (!filter.networks[link.network]) {
+        filter.networks[link.network] = true;
+        changed = true;
+      }
+    });
+    return changed;
+  }
+
+  // The box that shows a group's cards: its cabinet, or, for a group of
+  // consoles alone (no cabinet), the first of the group's cards.
+  function groupBoxOf(group) {
+    if (nodeData("rack:" + group)) {
+      return "rack:" + group;
+    }
+    var cards = ((tree && tree.data && tree.data.nodes) || []).filter(function (datum) {
+      var data = datum.data || {};
+      return data.level === "node" && groupOf(data.attrs) === group;
+    });
+    return cards.length ? cards[0].id : null;
+  }
+
+  // How far past a box the view stops short of the stage's edge, in design px.
+  var REVEAL_GAP = 24;
+
+  // The least pan that brings a box wholly on screen, past the stage's
+  // padding and clear of the title block over it; a box bigger than the
+  // stage is centred. A cabinet just opened is shown rather than left below
+  // the fold, where its new cards would appear to have done nothing.
+  function revealBox(id) {
+    var datum = nodeData(id);
+    if (!datum || !graph) {
+      return Promise.resolve();
+    }
+    var zoom = graph.getZoom();
+    var at = graph.getViewportByCanvas([datum.style.x, datum.style.y]);
+    var halfW = (widthOf(datum) / 2) * zoom;
+    var halfH = (heightOf(datum) / 2) * zoom;
+    var size = graph.getSize();
+    var pad = stagePadding();
+    var edge = viewPx(REVEAL_GAP);
+    var near = { left: pad[3] + edge, right: size[0] - pad[1] - edge, top: topClearance() + edge, bottom: size[1] - pad[2] - edge };
+    var dx = at[0] - halfW < near.left ? near.left - (at[0] - halfW) : at[0] + halfW > near.right ? near.right - (at[0] + halfW) : 0;
+    var dy = at[1] - halfH < near.top ? near.top - (at[1] - halfH) : at[1] + halfH > near.bottom ? near.bottom - (at[1] + halfH) : 0;
+    if (halfW * 2 > near.right - near.left) {
+      dx = (near.left + near.right) / 2 - at[0];
+    }
+    if (halfH * 2 > near.bottom - near.top) {
+      dy = (near.top + near.bottom) / 2 - at[1];
+    }
+    return dx || dy ? graph.translateBy([dx, dy], false) : Promise.resolve();
+  }
+
+  // Redraws the hardware picture under the current filter, fitted anew, and
+  // brings the cabinet of a group just opened on screen. The chips and the
+  // hint read the filter as it now stands, whether or not there is a picture.
+  function refilter(openGroup) {
+    pressFilterChips();
     if (!graph || mode !== "hw" || !lastModel) {
       return Promise.resolve();
     }
@@ -2485,6 +2597,10 @@
       .then(function () {
         renderResults();
         return fitHardware();
+      })
+      .then(function () {
+        var box = openGroup === undefined ? null : groupBoxOf(openGroup);
+        return box ? revealBox(box) : undefined;
       });
     return pending;
   }
@@ -2508,7 +2624,9 @@
       clearLit();
       el.input.focus();
     });
-    Array.prototype.forEach.call(panel.querySelectorAll(".gsearch__chip"), function (chip) {
+    // The type chips of the software view narrow the results; none pressed
+    // means every type, so a pressed chip alone can answer with rows.
+    Array.prototype.forEach.call(panel.querySelectorAll(".gsearch__chip[data-type]"), function (chip) {
       chip.addEventListener("click", function () {
         var on = chip.getAttribute("aria-pressed") !== "true";
         var type = chip.getAttribute("data-type");

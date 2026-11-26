@@ -321,10 +321,8 @@
 
   var CONTENT_X = 24; // from the picture's left edge to the network cabinet
   var BUS_PITCH = 18; // from one bar to the next
-  var BUS_W = BUS_PITCH; // a bar's node: the hover band, and the name tag that rides the line
+  var BUS_W = BUS_PITCH; // a bar's node: the hover band (the name sits on its switch)
   var LINE_X = BUS_W / 2; // the line's offset from the node's left: its middle
-  var TAG_PAD = 6; // a tag's clearance from the bar's ends
-  var TAG_STAGGER = 28; // every other bar's tag rides this much lower, so the row of tags breathes
   var RACK_RULE = 32; // the cabinet's head: the group's name and unit count over a rule
   var RACK_HEAD = RACK_RULE + 8; // the head and the clearance under its rule, to the first unit
   var RACK_PAD = 9; // the cabinet's rails: from its frame to the servers
@@ -798,9 +796,6 @@
           empty: !count,
           w: BUS_W,
           h: busH,
-          labelH: tagLength(network.name),
-          // Alternate bars' tags ride lower (see stickLabels).
-          stagger: ((barX[busId] - gutterX - LANE_PAD - BUS_W / 2) / BUS_PITCH) % 2 ? TAG_STAGGER : 0,
           color: hues[busId],
           count: count,
           ports: [{ key: "end", placement: [LINE_X / BUS_W, 1] }].concat(
@@ -967,18 +962,9 @@
     sub: { font: "10px Barlow, sans-serif", spacing: 0.3 },
     row: { font: "11.5px Barlow, sans-serif", spacing: 0.23 },
     toggle: { font: "12px Barlow, sans-serif", spacing: 0 },
-    tag: { font: "600 9px Barlow, sans-serif", spacing: 1.08 },
     rackName: { font: "600 11px Barlow, sans-serif", spacing: 1.54 },
     rackCount: { font: "10px Barlow, sans-serif", spacing: 1 }
   };
-
-  // From the .bus__tag rule of app.css: the pill's end paddings and borders.
-  var TAG_ENDS = 6 * 2 + 2;
-
-  // The length a name tag takes down its bar.
-  function tagLength(name) {
-    return Math.ceil(textWidth("tag", String(name).toUpperCase()) + TAG_ENDS + 2);
-  }
 
   // From the rack rules of app.css: the head's paddings and gap, and the
   // count pill's padding and border.
@@ -1116,60 +1102,17 @@
   }
 
   // A bus of the hardware view: the hover band down the bar (the line is
-  // the network's edge under it) and the name tag riding the line in the
-  // network's hue, read top to bottom. The tag slides down by the bar's
-  // stuck offset, so it stays in view as the picture scrolls
-  // (stickLabels); the node count stays in the hover card. The
-  // box modifiers become bus ones.
+  // the network's edge under it). The bar wears no name: each network's
+  // name stands on its switch in the cabinet. The node count stays in the
+  // hover card. The box modifiers become bus ones.
   function busHtml(datum, modifier) {
     var data = datum.data || {};
     var classes = "bus" + (data.empty ? " bus--empty" : "") + (modifier ? " " + modifier.replace(/box--/g, "bus--") : "");
-    var offset = stuck[datum.id] || TAG_PAD + (data.stagger || 0);
     return (
       '<div class="' + classes + '" data-id="' + escapeHtml(datum.id) + '"' + (data.color ? ' style="--bus:' + data.color + '"' : "") + ">" +
       '<div class="bus__line"></div>' +
-      '<div class="bus__tag" style="top:' + offset + 'px">' + escapeHtml(data.label) + "</div>" +
       "</div>"
     );
-  }
-
-  // The tags are sticky: when a bar's top scrolls out under the title
-  // block, its tag slides down the line to stay just under it, as far as
-  // the bar's end. The offsets, in canvas units, are kept for the bus
-  // markup and set on the DOM in place.
-  var stuck = {};
-
-  function stickLabels() {
-    if (!graph || mode !== "hw" || !el.graph || !tree) {
-      return;
-    }
-    var viewTop = graph.getCanvasByViewport([0, topClearance()])[1];
-    (tree.data.nodes || []).forEach(function (datum) {
-      var data = datum.data || {};
-      if (data.level !== "bus") {
-        return;
-      }
-      var top = datum.style.y - data.h / 2;
-      var offset = Math.max(TAG_PAD, Math.min(viewTop - top + TAG_PAD, data.h - data.labelH - TAG_PAD - (data.stagger || 0))) + (data.stagger || 0);
-      stuck[datum.id] = offset;
-      var tag = el.graph.querySelector('.bus[data-id="' + datum.id + '"] .bus__tag');
-      if (tag) {
-        tag.style.top = offset + "px";
-      }
-    });
-  }
-
-  var stickQueued = false;
-
-  function queueStick() {
-    if (stickQueued) {
-      return;
-    }
-    stickQueued = true;
-    requestAnimationFrame(function () {
-      stickQueued = false;
-      stickLabels();
-    });
   }
 
   // A cabinet of the hardware view: the software view's box as a frame,
@@ -1877,7 +1820,6 @@
         return graph.translateBy([(shot.position[0] - at[0]) * shot.zoom, (shot.position[1] - at[1]) * shot.zoom], false);
       })
       .then(function () {
-        stickLabels();
         return shot.pinned ? pin(shot.pinned) : undefined;
       });
   }
@@ -1903,9 +1845,6 @@
     // its rows' scroll; bring the lit row back into view.
     graph.on("node:pointerenter", relitRow);
     graph.on("node:pointerleave", relitRow);
-    // The bars' tags follow the view (see stickLabels).
-    stuck = {};
-    graph.on("aftertransform", queueStick);
     // A hovered card lights its reach (see reachOf): the networks' lines
     // and switches of a node, the path to the root of a software box.
     graph.on("node:pointerenter", function (event) {
@@ -2000,8 +1939,7 @@
       .then(function () {
         var at = graph.getViewportByCanvas([left, top]);
         return graph.translateBy([pad[3] - at[0], topClearance() - at[1]], false);
-      })
-      .then(stickLabels);
+      });
   }
 
   function fitPicture() {
@@ -2684,7 +2622,6 @@
     window.addEventListener("resize", function () {
       if (graph) {
         graph.resize();
-        queueStick();
       }
     });
   }

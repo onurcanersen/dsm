@@ -2929,10 +2929,11 @@ body.body--graph::before {
    zooms the whole picture by the root scale (uiScale), so the values stay
    px and mirror graph.js's constants. */
 
-/* A network of the hardware view (a G6 HTML node): a vertical bar, the
-   glowing line down its right and its name written down beside the line's
-   top, both in the network's own hue (--bus, set on the node; cyan when
-   none). The node is transparent, so the lines drawn under it show. */
+/* A network of the hardware view (a G6 HTML node): a vertical bar with the
+   glowing line down its right, in the network's own hue (--bus, set on the
+   node; cyan when none). The bar carries no name: the network's name stands
+   on its switch in the cabinet. The node is transparent, so the lines drawn
+   under it show. */
 .bus {
   --bus: var(--cyan);
   position: relative;
@@ -2945,8 +2946,7 @@ body.body--graph::before {
   pointer-events: none;
 }
 
-.bus__line,
-.bus__tag {
+.bus__line {
   pointer-events: auto;
 }
 
@@ -2959,50 +2959,6 @@ body.body--graph::before {
   bottom: 0;
   left: calc(50% - 5px);
   width: 10px;
-}
-
-/* The name tag riding the line: a pill in the network's hue over the
-   page's ink, the name read top to bottom; its top is set inline and
-   slides with the view (see stickLabels in graph.js). Its width stays
-   under the bars' pitch (BUS_PITCH), so neighbours never touch. */
-.bus__tag {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  box-sizing: border-box;
-  padding: 6px 0;
-  border: 1px solid var(--bus);
-  border-radius: var(--r-pill);
-  background: #06141b;
-  transform: translateX(-50%);
-  writing-mode: vertical-rl;
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  line-height: 14px;
-  color: var(--bus);
-  white-space: nowrap;
-  text-transform: uppercase;
-  box-shadow: 0 0 6px color-mix(in srgb, var(--bus) 40%, transparent);
-  transition: color var(--t), border-color var(--t), box-shadow var(--t);
-}
-
-/* A network nothing joins: the tag dashed, like its line. */
-.bus--empty .bus__tag {
-  border-style: dashed;
-  box-shadow: none;
-}
-
-.bus--active .bus__tag {
-  border-color: #ffffff;
-  color: #ffffff;
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.6);
-}
-
-.bus--highlight .bus__tag {
-  border-color: var(--mark);
-  color: var(--mark);
-  box-shadow: 0 0 8px var(--mark-dim);
 }
 
 /* A server cabinet of the hardware view (its own HTML node, drawn under

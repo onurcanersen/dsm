@@ -50,6 +50,29 @@ def test_connect_keeps_the_configured_second_address_for_another_first_one():
     assert source.fallback_connection_address == seed.FALLBACK_SOURCE_REPO_URL
 
 
+def test_connect_prefers_the_second_address_the_session_names():
+    data_sources = _service()
+    token = data_sources.open()
+
+    data_sources.connect(
+        token, SourceType.SOURCE_CODE_REPO, seed.SOURCE_REPO_URL, seed.USER, seed.PASSWORD,
+        f" {seed.OTHER_FALLBACK_SOURCE_REPO_URL} ",
+    )
+
+    source = data_sources.connected(token)[SourceType.SOURCE_CODE_REPO]
+    assert source.fallback_connection_address == seed.OTHER_FALLBACK_SOURCE_REPO_URL
+
+
+def test_an_empty_second_address_drops_the_configured_one():
+    data_sources = _service()
+    token = data_sources.open()
+
+    data_sources.connect(token, SourceType.SOURCE_CODE_REPO, seed.SOURCE_REPO_URL, seed.USER, seed.PASSWORD, "")
+
+    source = data_sources.connected(token)[SourceType.SOURCE_CODE_REPO]
+    assert source.fallback_connection_address == ""
+
+
 def test_config_mgmt_db_is_verified_when_connected():
     data_sources = _service(error=ConfigManagementAccessError("bad creds"))
     token = data_sources.open()

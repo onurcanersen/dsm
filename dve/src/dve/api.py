@@ -9,7 +9,7 @@ Endpoints:
   GET    /api/session
   GET    /api/csrf-token
   POST   /api/data-sources/connect/config-mgmt-db      {"connection_address", "username", "password"}   [login]
-  POST   /api/data-sources/connect/source-code-repo    {"connection_address", "username", "password"}   [login]
+  POST   /api/data-sources/connect/source-code-repo    {"connection_address", "username", "password", "fallback_connection_address"?}   [login]
   GET    /api/projects                                                                                  [login + config_mgmt_db]
   GET    /api/projects/<project_id>/platforms                                                            [login + config_mgmt_db]
   GET    /api/projects/<project_id>/platforms/<platform_id>/versions                                     [login + config_mgmt_db]
@@ -57,6 +57,9 @@ logger = logging.getLogger(__name__)
 
 _CREDENTIALS = ("username", "password")
 _CONNECT_FIELDS = ("connection_address", "username", "password")
+_FALLBACK_FIELD = "fallback_connection_address"
+"""The optional second address of a connect body; absent keeps the one dve.ini
+names, an empty one drops it."""
 _CANDIDATE_FIELDS = ("unit_name", "version")
 _CONNECT_SOURCES = {
     "config-mgmt-db": SourceType.CONFIG_MGMT_DB,
@@ -155,7 +158,14 @@ def create_app(runtime: Runtime | None = None) -> Flask:
     source_repo_required = connected(SourceType.SOURCE_CODE_REPO, "source code repo connection required")
 
     def defaults():
-        return {source_type.value: runtime.defaults[source_type].connection_address for source_type in SourceType}
+        """The addresses the connection modal prefills with, per data source."""
+        return {
+            source_type.value: {
+                "connection_address": runtime.defaults[source_type].connection_address,
+                "fallback_connection_address": runtime.defaults[source_type].fallback_connection_address,
+            }
+            for source_type in SourceType
+        }
 
     def catalog(key: str, read):
         """A configuration management database listing as {key: [...]}, or 502 (req 4)."""
@@ -221,17 +231,26 @@ def create_app(runtime: Runtime | None = None) -> Flask:
     @app.route("/api/data-sources/connect/<source>", methods=["POST"])
     @login_required
     def api_connect(source):
-        """Connects one data source with the credentials in the body; a refused source answers 502 (req 4, 7)."""
+        """Connects one data source with the credentials in the body, and with the
+        second address it names when it names one; a refused source answers 502 (req 4, 7)."""
         source_type = _CONNECT_SOURCES.get(source)
         if source_type is None:
             return _error("unknown data source", 404)
         body, error = _json_body(*_CONNECT_FIELDS)
         if error:
             return error
+        fallback = body.get(_FALLBACK_FIELD)
         token = runtime.data_sources.open(session.get("conn_token"))
         session["conn_token"] = token
         try:
-            runtime.data_sources.connect(token, source_type, body["connection_address"], body["username"], body["password"])
+            runtime.data_sources.connect(
+                token,
+                source_type,
+                body["connection_address"],
+                body["username"],
+                body["password"],
+                None if fallback is None else str(fallback),
+            )
         except (ConfigManagementAccessError, SourceRepoAccessError, SourceRepoAuthError) as exc:
             return _error(str(exc), 502)
         return jsonify({"connected": True})

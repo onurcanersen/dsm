@@ -36,7 +36,13 @@ def test_login_returns_the_user_and_the_data_source_defaults(client):
     assert response.status_code == 200
     assert response.get_json() == {
         "username": seed.OPERATOR, "role": "operator",
-        "defaults": {"config_mgmt_db": seed.CONFIG_DB_ADDRESS, "source_code_repo": seed.SOURCE_REPO_URL},
+        "defaults": {
+            "config_mgmt_db": {"connection_address": seed.CONFIG_DB_ADDRESS, "fallback_connection_address": ""},
+            "source_code_repo": {
+                "connection_address": seed.SOURCE_REPO_URL,
+                "fallback_connection_address": seed.FALLBACK_SOURCE_REPO_URL,
+            },
+        },
     }
 
 
@@ -62,7 +68,13 @@ def test_session_reports_unauthenticated_then_the_full_state(client, login, conn
 
     assert client.get("/api/session").get_json() == {
         "authenticated": True, "username": seed.ADMIN, "role": "admin",
-        "defaults": {"config_mgmt_db": seed.CONFIG_DB_ADDRESS, "source_code_repo": seed.SOURCE_REPO_URL},
+        "defaults": {
+            "config_mgmt_db": {"connection_address": seed.CONFIG_DB_ADDRESS, "fallback_connection_address": ""},
+            "source_code_repo": {
+                "connection_address": seed.SOURCE_REPO_URL,
+                "fallback_connection_address": seed.FALLBACK_SOURCE_REPO_URL,
+            },
+        },
         "config_mgmt_db_connected": True, "source_code_repo_connected": True,
     }
 
@@ -166,6 +178,51 @@ def test_reconnecting_config_mgmt_db_leaves_the_sibling_source_alone(signed_in_c
 
     body = signed_in_client.get("/api/session").get_json()
     assert (body["config_mgmt_db_connected"], body["source_code_repo_connected"]) == (True, True)
+
+
+@pytest.mark.parametrize("fallback, expected", [
+    (seed.OTHER_FALLBACK_SOURCE_REPO_URL, seed.OTHER_FALLBACK_SOURCE_REPO_URL),
+    ("", ""),
+    (None, seed.FALLBACK_SOURCE_REPO_URL),
+])
+def test_the_second_address_is_the_one_the_repository_connected_with(
+    make_runtime, make_client, login, connect_config_mgmt_db, connect_source_repo, fallback, expected
+):
+    """A typed address wins, an empty one drops the mirror, and a body that leaves
+    the field out keeps the address dve.ini names."""
+    runner = FakeTaskRunner()
+    client = make_client(make_runtime(task_runner=runner))
+    login(client)
+    connect_config_mgmt_db(client)
+
+    assert connect_source_repo(client, fallback=fallback).status_code == 200
+    assert client.post("/api/mdg/run", json=seed.SELECTION).status_code == 202
+
+    _, (_, sources, _, _) = runner.submitted[0]
+    assert sources[SourceType.SOURCE_CODE_REPO.value]["fallback_connection_address"] == expected
+
+
+def test_a_second_address_on_the_config_mgmt_db_is_kept_for_the_run(make_runtime, make_client, login, connect_source_repo):
+    """The database ignores the second address when it connects, but the session's
+    source carries what the body named."""
+    runner = FakeTaskRunner()
+    client = make_client(make_runtime(task_runner=runner))
+    login(client)
+    connect_source_repo(client)
+
+    response = client.post(
+        "/api/data-sources/connect/config-mgmt-db",
+        json={
+            "connection_address": seed.CONFIG_DB_ADDRESS, "username": seed.USER, "password": seed.PASSWORD,
+            "fallback_connection_address": seed.OTHER_FALLBACK_SOURCE_REPO_URL,
+        },
+    )
+
+    assert response.status_code == 200
+    assert client.post("/api/mdg/run", json=seed.SELECTION).status_code == 202
+
+    _, (_, sources, _, _) = runner.submitted[0]
+    assert sources[SourceType.CONFIG_MGMT_DB.value]["fallback_connection_address"] == seed.OTHER_FALLBACK_SOURCE_REPO_URL
 
 
 def test_connect_validates_the_body(client, login, connect_config_mgmt_db):

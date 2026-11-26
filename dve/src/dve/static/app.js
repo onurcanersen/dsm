@@ -40,7 +40,8 @@
   }
 
   /* The data sources this session must connect; `flag` is the field GET
-   * /api/session reports the connection under. */
+   * /api/session reports the connection under, and `fallback` marks the one whose
+   * modal also edits the second address it retries. */
   var SOURCES = [
     {
       key: "config_mgmt_db",
@@ -56,7 +57,8 @@
       icon: "lucide-file-code",
       endpoint: "/api/data-sources/connect/source-code-repo",
       flag: "source_code_repo_connected",
-      userKey: "dve.last-repo-username"
+      userKey: "dve.last-repo-username",
+      fallback: true
     }
   ];
 
@@ -546,13 +548,24 @@
   var modalSource = null;
   var modalOpener = null;
 
+  /* The second address belongs only to the sources that retry at another address:
+   * hidden, the field is emptied and disabled so it is neither a tab stop nor a
+   * field the modal sends. */
+  function showFallbackField(shown, address) {
+    el.sourceFallbackField.hidden = !shown;
+    el.sourceFallbackAddress.disabled = !shown;
+    el.sourceFallbackAddress.value = shown ? address : "";
+  }
+
   function openModal(source, opener) {
     modalSource = source;
     modalOpener = opener || null;
     setMessage("modal", null, "");
     el.modalIcon.className = "lucide " + source.icon + " brand-icon";
     el.modalTitle.textContent = source.title;
-    el.sourceAddress.value = (state.defaults && state.defaults[source.key]) || "";
+    var defaults = (state.defaults && state.defaults[source.key]) || {};
+    el.sourceAddress.value = defaults.connection_address || "";
+    showFallbackField(!!source.fallback, defaults.fallback_connection_address || "");
     el.sourceUsername.value = "";
     restore(el.sourceUsername, source.userKey);
     el.sourcePassword.value = "";
@@ -575,7 +588,7 @@
   }
 
   function wireModal() {
-    clearOnInput([el.sourceAddress, el.sourceUsername, el.sourcePassword], "modal");
+    clearOnInput([el.sourceAddress, el.sourceFallbackAddress, el.sourceUsername, el.sourcePassword], "modal");
 
     Array.prototype.forEach.call(el.modal.querySelectorAll("[data-modal-close]"), function (node) {
       node.addEventListener("click", closeModal);
@@ -633,6 +646,10 @@
       username: el.sourceUsername.value,
       password: el.sourcePassword.value
     };
+    if (source.fallback) {
+      // Sent as it stands, so an emptied field drops the configured second address.
+      credentials.fallback_connection_address = el.sourceFallbackAddress.value.trim();
+    }
 
     setBusy(el.modalSubmit, true, "Connecting", "Connect");
     request("POST", source.endpoint, credentials)

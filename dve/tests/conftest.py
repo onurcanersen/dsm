@@ -118,11 +118,14 @@ def connect_config_mgmt_db():
 
 @pytest.fixture
 def connect_source_repo():
-    def action(client, address=seed.SOURCE_REPO_URL, username=seed.USER, password=seed.PASSWORD):
-        return client.post(
-            "/api/data-sources/connect/source-code-repo",
-            json={"connection_address": address, "username": username, "password": password},
-        )
+    def action(client, address=seed.SOURCE_REPO_URL, username=seed.USER, password=seed.PASSWORD,
+               fallback=seed.FALLBACK_SOURCE_REPO_URL):
+        """Connects the source code repository; `fallback=None` leaves the second
+        address out of the body, `fallback=""` clears the configured one."""
+        body = {"connection_address": address, "username": username, "password": password}
+        if fallback is not None:
+            body["fallback_connection_address"] = fallback
+        return client.post("/api/data-sources/connect/source-code-repo", json=body)
     return action
 
 

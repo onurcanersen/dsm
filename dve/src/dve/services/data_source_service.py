@@ -32,20 +32,35 @@ class DataSourceService:
         self._sessions[token] = {}
         return token
 
-    def connect(self, token: str, source_type: SourceType, address: str, username: str, password: str) -> None:
+    def connect(
+        self,
+        token: str,
+        source_type: SourceType,
+        address: str,
+        username: str,
+        password: str,
+        fallback_address: Optional[str] = None,
+    ) -> None:
         """Connects one data source for the session after verifying it: the
         database with a project read (ConfigManagementAccessError on refusal),
         the source code repository with its access check (SourceRepoAuthError
-        or SourceRepoAccessError) (req 4, 7). The second address stays the one
-        dve.ini names, so a session that types another address keeps it too."""
+        or SourceRepoAccessError) (req 4, 7). The session's own second address
+        is used when it names one, even an empty one, so a cleared field drops
+        the mirror; only a call that leaves the argument out keeps the address
+        dve.ini names."""
         default = self._defaults[source_type]
+        fallback = (
+            default.fallback_connection_address
+            if fallback_address is None
+            else fallback_address.strip()
+        )
         source = DataSourceConfig(
             source_type,
             default.source_name,
             default.access_method,
             address,
             f"{username}:{password}",
-            default.fallback_connection_address,
+            fallback,
         )
         if source_type is SourceType.CONFIG_MGMT_DB:
             self._config_repo_factory(source).list_projects()

@@ -18,6 +18,8 @@ PASSWORD = "dsm"  # NOSONAR dev-stack stand-in from dev/compose.yaml, not a real
 CONFIG_DB_ADDRESS = "localhost:3306/cmdb"
 SOURCE_REPO_URL = "http://localhost:3000/dsm-src"
 FALLBACK_SOURCE_REPO_URL = "http://localhost:3000/dsm-mirror"
+OTHER_FALLBACK_SOURCE_REPO_URL = "http://backup:3000/dsm-mirror"
+"""A second address a session can type instead of the configured mirror."""
 RUN_1 = "run-1"
 RUN_2 = "run-2"
 FILE_NAME = f"{PROJECT}_{PLATFORM}_{VERSION}.json"
